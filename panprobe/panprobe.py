@@ -130,23 +130,23 @@ def get_pangraphex(osarch):
     if osarch["os"] == "linux":
         if osarch["arch"] == "arm64":
             if osarch["libc"] == "gnu":
-                return "tools/pangraph/pangraph-aarch64-unknown-linux-gnu"
+                return "tools/pangraph/pangraph-aarch64-linux-gnu"
             elif osarch["libc"] == "musl":
-                return "tools/pangraph/pangraph-aarch64-unknown-linux-musl"
+                return "tools/pangraph/pangraph-aarch64-linux-musl"
             else:
                 logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
         elif osarch["arch"] == "x86_64":
             if osarch["libc"] == "gnu":
-                return "tools/pangraph/pangraph-x86_64-unknown-linux-gnu"
+                return "tools/pangraph/pangraph-x86_64-linux-gnu"
             elif osarch["libc"] == "musl":
-                return "tools/pangraph/pangraph-x86_64-unknown-linux-musl"
+                return "tools/pangraph/pangraph-x86_64-linux-musl"
             else:
                 logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
     elif osarch["os"] == "darwin":
         if osarch["arch"] == "arm64":
-            return "tools/pangraph/pangraph-aarch64-apple-darwin"
+            return "tools/pangraph/pangraph-aarch64-darwin"
         elif osarch["arch"] == "x86_64":
-            return "tools/pangraph/pangraph-x86_64-apple-darwin"
+            return "tools/pangraph/pangraph-x86_64-darwin"
         else:
             logger.error(f"Unsupported os/architecture combination {osarch["os"]}/{osarch['arch']}")
     elif osarch["os"] == "windows":
@@ -179,6 +179,7 @@ def run_finalprobetools(args,inprobes):
     finalpref = f"{outloc}_probetools_final"
     finalprobes= f"{finalpref}_probes.fa"
     topdir = os.path.dirname(os.path.abspath(__file__))
+    # cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11.py makeprobes -t /Users/mpay0321/Dropbox/Probe_design_project/2025-02-14_add_probetools_makeprobeswinput/cluster0_pangenome_kminimap2_a200_b12.5_s20_90min_rep1_179.fasta -b 10 -o /Users/mpay0321/Dropbox/Probe_design_project/2025-02-14_add_probetools_makeprobeswinput/rep1_probetoolscomplete -c 100 -l 90 -L 20 -T 10"
     probetools_log = open(outloc + "_probetools.log","w")
     cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {args.input} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
 
@@ -253,6 +254,7 @@ def runprobetoolscapture(args,probes):
     current_directory = os.path.dirname(os.path.abspath(__file__))
     capture_log = open(outloc + "_capture.log", "w")
     with open(os.devnull, 'w') as devnull:
+        # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
         cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11.py capture -t {args.input} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{args.outputfolder}/{args.outputprefix}_capture.pt"
@@ -434,11 +436,11 @@ def get_args():
         parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         args = parser.parse_args()
         ## DESIGN
-        # args.input = ""
+        # args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/flu/ref/H3N2_complete_rename.fasta"
         # args.clusterassign = False
         # args.threads = 10
         # args.maxnonspandard =0.01
-        # args.outputfolder=""
+        # args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/2025_02_19_probetools_dontcountN/"
         # args.outputprefix="flu"
         # args.probelen = 120
         # args.probestep = 120
@@ -467,14 +469,14 @@ def get_args():
 
         ### EVAL
 
-        args.input = ""
+        args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch_capture.pt"
         args.inputtype = "capture"
-        args.probes = ""
+        args.probes = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch.fasta"
         args.clusterassign = False
         args.clustertype="tabular"
         args.threads = 10
         args.maxnonspandard =0.01
-        args.outputfolder=""
+        args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/2025_02_19_probetools_dontcountN/"
         args.outputprefix="denguetest"
         args.filtnonstandard=True
         args.probetoolsidentity = 85
