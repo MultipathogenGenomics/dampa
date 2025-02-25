@@ -164,7 +164,7 @@ def run_pangraph(args):
 
     osarch = detect_os_arch()
     pangraphex = get_pangraphex(osarch)
-    cmd = f"""{topdir}/{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {args.input} > {outloc}.json && {topdir}/tools/pangraph export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/tools/pangraph export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+    cmd = f"""{topdir}/{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {args.input} > {outloc}.json && {topdir}/{pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
