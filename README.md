@@ -1,2 +1,2 @@
-# Panprobe
-Panprobe: probe design from pangenome graphs
+# Dampa
+Dampa: Diversity Aware Metagenomic Panel Assignment 
