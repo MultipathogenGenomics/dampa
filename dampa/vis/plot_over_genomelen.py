@@ -15,15 +15,6 @@ from itertools import groupby
 from collections import Counter
 from time import sleep as sl
 
-def count_zero_sequences(lst):
-    # Group consecutive elements
-    groups = [(k, len(list(g))) for k, g in groupby(lst)]
-
-    # Extract only the lengths of sequences of 0s
-    zero_lengths = [length for value, length in groups if value == 0]
-
-    # Count occurrences of each sequence length
-    return Counter(zero_lengths)
 
 def replace_short_zeros(lst,threshold):
     """
@@ -43,41 +34,6 @@ def replace_short_zeros(lst,threshold):
         else:
             i += 1
     return lst
-
-def load_capture_data(capture_path):
-    # print(f'Loading capture data from {capture_path}...')
-    with open(capture_path, 'r') as input_file:
-        headers, seqs, depths = [], [], []
-        for line in input_file:
-            if line[0] == '>':
-                if not seqs == [] and seqs[-1] == '':
-                    print(header[-1])
-                header = line.strip().lstrip('>')
-                headers.append(header)
-                seqs.append('')
-                depths.append('')
-            elif line[0] == '$':
-                seqs[-1] += line.strip()
-            elif line[0] == '#':
-                depths[-1] += line.strip()
-    seqs = [seq.lstrip('$') for seq in seqs]
-    depths = [[int(d) for d in depth.lstrip('#').split(',')] for depth in depths]
-    depths = [replace_short_zeros(x, 10) for x in depths]
-    if len(set(len(c) for c in [headers, seqs, depths])) != 1:
-        # logger.error(f'The number of headers, seqs, and probe depth lists do not match in {capture_path}.')
-        exit(1)
-    for header in headers:
-        if headers.count(header) > 1:
-            # logger.error(f'Header {header} appears more than once in {capture_path}.\n')
-            exit(1)
-    capture_data = {header: (seq, depth) for header, seq, depth in zip(headers, seqs, depths)}
-    for header in capture_data.keys():
-        if len(capture_data[header][0]) != len(capture_data[header][1]):
-            # logger.error(f'Seq length and probe depth list length do not match for entry {header}.')
-            exit(1)
-    # print(f' Total targets loaded: {"{:,}".format(len(capture_data))}')
-    return capture_data
-
 
 
 def filt_lens(capdata,headers=False):
@@ -140,10 +96,3 @@ def make_genome_plots(capdata,pref):
         #     print(f"p2{c}")
     plt.axhline(y=1, color='black', linestyle='--',zorder=0,alpha=0.3)
     plt.savefig(f"{pref}_genomecov_lennorm.pdf")
-
-if __name__ == "__main__":
-    inpt = ""
-    outpref = ""
-
-    capdata = load_capture_data(inpt)
-    make_genome_plots(capdata,outpref)

@@ -12,7 +12,8 @@ import sys
 from collections import Counter
 import platform
 import subprocess
-from tools.gather_probe_depth_stats import make_stats, make_propsplot, make_meanplot, process_count_pt
+import glob
+from tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
 from vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
 
 
@@ -179,7 +180,6 @@ def run_finalprobetools(args,inprobes):
     finalpref = f"{outloc}_probetools_final"
     finalprobes= f"{finalpref}_probes.fa"
     topdir = os.path.dirname(os.path.abspath(__file__))
-    # cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11.py makeprobes -t /Users/mpay0321/Dropbox/Probe_design_project/2025-02-14_add_probetools_makeprobeswinput/cluster0_pangenome_kminimap2_a200_b12.5_s20_90min_rep1_179.fasta -b 10 -o /Users/mpay0321/Dropbox/Probe_design_project/2025-02-14_add_probetools_makeprobeswinput/rep1_probetoolscomplete -c 100 -l 90 -L 20 -T 10"
     probetools_log = open(outloc + "_probetools.log","w")
     cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {args.input} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
 
@@ -411,7 +411,7 @@ def subambig(probes,props):
         outprobes.append(probe)
     SeqIO.write(outprobes,probes,"fasta")
 
-def cleanup(args):
+def cleanup(args,filtgenomes):
     if args.keeptmp:
         logger.info("Keeping temporary files")
     else:
@@ -424,13 +424,9 @@ def cleanup(args):
         os.remove(outloc + "_probetools_final_summary_stats_report.tsv")
         os.remove(outloc + "_probetools_final_capture.pt")
         os.remove(outloc + "_probetools_final_low_cov_seqs.fa")
-    if args.keeplogs:
-        logger.info("Keeping logs")
-    else:
-        logger.info("Cleaning up logs")
-        outloc = f"{args.outputfolder}/{args.outputprefix}"
-        os.remove(outloc + "_probetools.log")
-        os.remove(outloc + "_pangraph.log")
+        filtgenomesrm=glob.glob(f"{filtgenomes}*")
+        for i in filtgenomesrm:
+            os.remove(i)
     logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
 def get_args():
@@ -456,56 +452,57 @@ def get_args():
         parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         args = parser.parse_args()
         ## DESIGN
-        # args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/flu/ref/H3N2_complete_rename.fasta"
-        # args.clusterassign = False
-        # args.threads = 10
-        # args.maxnonspandard =0.01
-        # args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/2025_02_19_probetools_dontcountN/"
-        # args.outputprefix="flu"
-        # args.probelen = 120
-        # args.probestep = 120
-        # args.skipsubambig = False
-        # args.pangraphident = 20
-        # args.pangraphalpha = 100
-        # args.pangraphbeta = 10
-        # args.pangraphlen = 90
-        # args.probetoolsidentity = 85
-        # args.probetoolsalignmin = 90
-        # args.probetools0covnmin = 20
-        # args.probetoolsbatch = 100
-        # args.maxambig = 10
-        # args.skip_padding = False
-        # args.padding_nuc = 'T'
-        # args.minlenforpadding = 90
-        # args.skip_probetoolsfinal = False
-        # args.genprefix = False
-        # args.threads = 10
-        # args.keeplogs = False
-        # args.skip_summaries = False
-        # args.maxdepth_describe = 1
-        # args.report0covperc = 1
-        # args.version = False
-        # args.command = "design"
-
-        ### EVAL
-
-        args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch_capture.pt"
-        args.inputtype = "capture"
-        args.probes = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch.fasta"
+        args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025_species_initial_dampa_analysis/2025-02-17_panprobe_w_probetools_results/jev/ref/all_jev_shorthead.fasta"
         args.clusterassign = False
-        args.clustertype="tabular"
         args.threads = 10
         args.maxnonspandard =0.01
-        args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/2025_02_19_probetools_dontcountN/"
-        args.outputprefix="denguetest"
-        args.filtnonstandard=True
+        args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/dampa_testing/2025-04-02_tmp_remove/"
+        args.outputprefix="jev_tmprmtest"
+        args.probelen = 120
+        args.probestep = 120
+        args.skipsubambig = False
+        args.pangraphident = 20
+        args.pangraphalpha = 100
+        args.pangraphbeta = 10
+        args.pangraphlen = 90
         args.probetoolsidentity = 85
         args.probetoolsalignmin = 90
+        args.probetools0covnmin = 20
+        args.probetoolsbatch = 100
+        args.maxambig = 10
+        args.skip_padding = False
+        args.padding_nuc = 'T'
+        args.minlenforpadding = 90
+        args.skip_probetoolsfinal = False
+        args.genprefix = False
+        args.threads = 10
         args.keeplogs = False
+        args.skip_summaries = False
         args.maxdepth_describe = 1
         args.report0covperc = 1
         args.version = False
-        args.command = "eval"
+        args.command = "design"
+        args.keeptmp = False
+
+        ### EVAL
+
+        # args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch_capture.pt"
+        # args.inputtype = "capture"
+        # args.probes = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch.fasta"
+        # args.clusterassign = False
+        # args.clustertype="tabular"
+        # args.threads = 10
+        # args.maxnonspandard =0.01
+        # args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/2025_02_19_probetools_dontcountN/"
+        # args.outputprefix="denguetest"
+        # args.filtnonstandard=True
+        # args.probetoolsidentity = 85
+        # args.probetoolsalignmin = 90
+        # args.keeplogs = False
+        # args.maxdepth_describe = 1
+        # args.report0covperc = 1
+        # args.version = False
+        # args.command = "eval"
 
         return args
     else:
@@ -697,7 +694,7 @@ def main():
             if not args.skip_summaries:
                 finalcaptureout = runprobetoolscapture(args,probename)
                 make_summaries(args, finalcaptureout,totalprobes)
-        cleanup(args.outputfolder,args.outputprefix)
+        cleanup(args,filtgenomes)
         logger.info(f"dampa design finished. Total probes: {totalprobes}")
     elif args.command == "eval":
         if args.version:
