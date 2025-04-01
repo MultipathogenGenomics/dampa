@@ -411,7 +411,27 @@ def subambig(probes,props):
         outprobes.append(probe)
     SeqIO.write(outprobes,probes,"fasta")
 
-
+def cleanup(args):
+    if args.keeptmp:
+        logger.info("Keeping temporary files")
+    else:
+        logger.info("Cleaning up temporary files (use --keeptmp to keep pangenome graph and other temporary files)")
+        outloc = f"{args.outputfolder}/{args.outputprefix}"
+        os.remove(outloc + "_pangenome.gfa")
+        os.remove(outloc + ".json")
+        os.remove(outloc + "_pangenome.fa")
+        os.remove(outloc + "_probetools_final_long_stats_report.tsv")
+        os.remove(outloc + "_probetools_final_summary_stats_report.tsv")
+        os.remove(outloc + "_probetools_final_capture.pt")
+        os.remove(outloc + "_probetools_final_low_cov_seqs.fa")
+    if args.keeplogs:
+        logger.info("Keeping logs")
+    else:
+        logger.info("Cleaning up logs")
+        outloc = f"{args.outputfolder}/{args.outputprefix}"
+        os.remove(outloc + "_probetools.log")
+        os.remove(outloc + "_pangraph.log")
+    logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
 def get_args():
     def File(MyFile):
@@ -454,7 +474,7 @@ def get_args():
         # args.probetools0covnmin = 20
         # args.probetoolsbatch = 100
         # args.maxambig = 10
-        # args.run_padding = True
+        # args.skip_padding = False
         # args.padding_nuc = 'T'
         # args.minlenforpadding = 90
         # args.skip_probetoolsfinal = False
@@ -541,8 +561,8 @@ def get_args():
 
         additionalsettings = design.add_argument_group("Additional settings")
 
-        additionalsettings.add_argument("--run_padding",
-                            help="generate additional probes for pangenome nodes between pangraphlen and probelen in length. i.e. if padding is run 30*T would be added to the end of a 90bp pancontig",action='store_true')
+        additionalsettings.add_argument("--skip_padding",
+                            help="do not generate additional probes for pangenome nodes between pangraphlen and probelen in length. i.e. if padding is run 30*T would be added to the end of a 90bp pancontig",action='store_true')
         additionalsettings.add_argument("--padding_nuc",
                             help="nucleotide to use for padding probes to args.probelen", choices=['A',"T","C","G"],
                             default='T')
@@ -561,8 +581,10 @@ def get_args():
                                 default=1)
         additionalsettings.add_argument("--keeplogs",
                             help="keep logs containing output from pangraph and probetools",action='store_true')
+        additionalsettings.add_argument("--keeptmp",
+                            help="keep intermediate files from pangraph and probetools",action='store_true')
         additionalsettings.add_argument("--skip_summaries",
-                            help="do NOT run visualisation generaton of panprobe probes relative to input genomes",action='store_true')
+                            help="do NOT run visualisation generaton of dampa probes relative to input genomes",action='store_true')
         additionalsettings.add_argument("--maxdepth_describe",
                             default=1,help="Maximum depth of probe coverage to describe separately. i.e. if 1 there will be 0,1 and >1 depth categories")
         additionalsettings.add_argument("--report0covperc",
@@ -645,21 +667,22 @@ def main():
         if args.version:
             print(f"version {version}")
             sys.exit(0)
-        logger.info("Running panprobe design")
+        logger.info("Running dampa design")
         if args.genprefix:
             args.outputprefix = make_prefix(args)
         args.filtnonstandard = True
 
         logger.info("Filter genomes with too many non standard nucleotides")
-        args.input,overallprops = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
 
+        filtgenomes,overallprops = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
+        args.input = filtgenomes
         run_pangraph(args)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
         probename = args.outputfolder + "/" + args.outputprefix + "_probes.fasta"
         pangenomefasta = f"{args.outputfolder}/{args.outputprefix}_pangenome.fa"
 
         split_pangenome_into_probes(pangenomefasta, probename,args.probelen, args.probestep,args.maxambig)
 
-        if  args.run_padding:
+        if not args.skip_padding:
             make_padded_probes(pangenomefasta, probename,args.minlenforpadding)
         if not args.skip_probetoolsfinal:
             finalcaptureout,totalprobes = run_finalprobetools(args,probename)
@@ -674,18 +697,19 @@ def main():
             if not args.skip_summaries:
                 finalcaptureout = runprobetoolscapture(args,probename)
                 make_summaries(args, finalcaptureout,totalprobes)
-        logger.info(f"panprobe design finished. Total probes: {totalprobes}")
+        cleanup(args.outputfolder,args.outputprefix)
+        logger.info(f"dampa design finished. Total probes: {totalprobes}")
     elif args.command == "eval":
         if args.version:
             print(f"version {version}")
             sys.exit(0)
-        logger.info("Running panprobe eval")
+        logger.info("Running dampa eval")
         totalprobes = get_probeno(args.probes)[0]
         if args.inputtype != "capture":
             finalcaptureout = runprobetoolscapture(args, args.probes)
         else:
             finalcaptureout = args.input
         make_summaries(args, finalcaptureout,totalprobes)
-        logger.info("panprobe eval finished")
+        logger.info("dampa eval finished")
 if __name__ == "__main__":
     main()

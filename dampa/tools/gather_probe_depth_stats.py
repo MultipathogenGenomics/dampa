@@ -231,13 +231,13 @@ def make_stats(propcovs,names,maxcheck,meancovs,outpath,probes,report0covperc):
     stats = pd.concat([stats, new_row])
     new_row = pd.DataFrame([{"mean": failcovcheck}],index=["failed_genomes"])
     stats = pd.concat([stats, new_row])
-    indata.to_csv(f"{outpath}pergenome_cov_stats.csv",float_format='%.3f')
+    indata.to_csv(f"{outpath}_pergenome_cov_stats.csv",float_format='%.3f')
     # stats.loc[len(stats)] = [len(mapped), None, None, None]
     # stats.loc[len(stats)] = ["mapped", None, None, None]
     # inls["mapped"] = [len(mapped),"","","","","",""]
     # inls["total"] = [len(mapped)+len(unmapped), "", "", "","","",""]
 
-    stats.to_csv(f"{outpath}summary_stats_of_perc_coverage.csv",float_format='%.3f')
+    stats.to_csv(f"{outpath}_summary_stats_of_perc_coverage.csv",float_format='%.3f')
 
 
 
