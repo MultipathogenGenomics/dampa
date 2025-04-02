@@ -19,6 +19,12 @@ from time import sleep as sl
 def replace_short_zeros(lst,threshold):
     """
     function needed becuase blast will call 0 at ends of probe if there are snps (due to it being a local alignment) but capture will not be effected by this
+        Args:
+        lst (list): List of integers.
+        threshold (int): Threshold length for replacing zeros.
+
+    Returns:
+        list: Modified list with short sequences of zeros replaced by ones.
     """
     n = len(lst)
     i = 0
@@ -36,7 +42,17 @@ def replace_short_zeros(lst,threshold):
     return lst
 
 
-def filt_lens(capdata,headers=False):
+def filt_lens(capdata, headers=False):
+    """
+    Filters capture data based on the median length of sequences.
+
+    Args:
+        capdata (dict): Dictionary containing capture data.
+        headers (bool): Whether to include headers in the output.
+
+    Returns:
+        list: List of tuples containing filtered lengths, percentage positions, and headers.
+    """
     lens =[len(capdata[x][1]) for x in capdata]
     medlen = median(lens)
     medtop = medlen + (medlen*0.1)
@@ -56,7 +72,17 @@ def filt_lens(capdata,headers=False):
     zipped = list(zip(filtlens,percpos,hfilt))
     return zipped
 
-def make_genome_plots(capdata,pref):
+def make_genome_plots(capdata, pref):
+    """
+    Generates genome coverage plots from capture data.
+
+    Args:
+        capdata (dict): Dictionary containing capture data.
+        pref (str): Prefix for output files.
+
+    Returns:
+        None
+    """
     # print("load")
     zipdata = filt_lens(capdata)
     # print("normalise")

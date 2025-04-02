@@ -1,7 +1,7 @@
 """
 ## Author: Michael Payne, michael.payne@sydney.edu.au
 
-This script takes
+This script processes probe depth statistics and generates plots.
 """
 import argparse
 import glob
@@ -15,6 +15,16 @@ import numpy as np
 
 
 def process_count_pt(countfile, maxcheck):
+    """
+    Processes probe depth counts and calculates coverage statistics.
+
+    Args:
+        countfile (tuple): Tuple containing headers and depth counts.
+        maxcheck (int): Maximum depth to check.
+
+    Returns:
+        tuple: Proportions of coverage, mean coverage, and depth counts.
+    """
     countdf = np.array(countfile[1])
     propcovs = []
     # countdf["depth"] = countdf.iloc[:, columns_to_sum].sum(axis=1)
@@ -42,8 +52,21 @@ def process_count_pt(countfile, maxcheck):
     return propcovs,meancov,countfile[1]
 
 
-def make_propsplot(propcovs,names,maxcheck,outpath,clusters=False):
-    inls = {names[x]:propcovs[x] for x in range(len(propcovs))}
+def make_propsplot(propcovs, names, maxcheck, outpath, clusters=False):
+    """
+    Generates plots of genome coverage proportions.
+
+    Args:
+        propcovs (list): List of coverage proportions.
+        names (list): List of genome names.
+        maxcheck (int): Maximum depth to check.
+        outpath (str): Path to save the output plots.
+        clusters (bool): Whether to include cluster information in the plots.
+
+    Returns:
+        None
+    """
+    inls = {names[x]: propcovs[x] for x in range(len(propcovs))}
     indata = pd.DataFrame(inls).T
     indata.columns = [f"{x}" for x in range(maxcheck+1)] + [f">{maxcheck}","meancov"]
     if clusters:
@@ -92,8 +115,23 @@ def make_propsplot(propcovs,names,maxcheck,outpath,clusters=False):
         plt.savefig(f"{outpath}_perc_genome_cov_boxplots.pdf")
 
 
-def make_stats(propcovs,names,maxcheck,meancovs,outpath,probes,report0covperc):
-    inls = dict({names[x]:propcovs[x] for x in range(len(propcovs))})
+def make_stats(propcovs, names, maxcheck, meancovs, outpath, probes, report0covperc):
+    """
+    Generates summary statistics and saves them to CSV files.
+
+    Args:
+        propcovs (list): List of coverage proportions.
+        names (list): List of genome names.
+        maxcheck (int): Maximum depth to check.
+        meancovs (list): List of mean coverages.
+        outpath (str): Path to save the output CSV files.
+        probes (int): Total number of probes.
+        report0covperc (float): Threshold for reporting genomes with high zero coverage.
+
+    Returns:
+        None
+    """
+    inls = dict({names[x]: propcovs[x] for x in range(len(propcovs))})
     [inls[names[x]].append(meancovs[x]) for x in range(len(propcovs))]
 
     indata = pd.DataFrame(inls).T

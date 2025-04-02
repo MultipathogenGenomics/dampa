@@ -20,6 +20,15 @@ from vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
 
 
 def detect_os_arch():
+    """
+        Detects the operating system and architecture of the current machine, and attempts to determine the type of libc used on Linux systems.
+
+    Returns:
+        dict: A dictionary containing the following keys:
+            - "os": The operating system (e.g., "linux", "windows", "darwin").
+            - "arch": The machine architecture (e.g., "x86_64", "arm64").
+            - "libc": The type of libc used on Linux systems ("gnu", "musl", or None if undetermined).
+    """
     system = platform.system().lower()  # "linux", "windows", "darwin" (macOS)
     machine = platform.machine().lower()  # "x86_64", "arm64", etc.
 
@@ -51,6 +60,17 @@ def detect_os_arch():
 
 
 def make_padded_probes(pangenomefa,probefasta,minlen):
+    """
+    Generates padded probes for sequences in the pangenome that are shorter than a specified length.
+
+    Args:
+        pangenomefa (str): Path to the input pangenome FASTA file.
+        probefasta (str): Path to the output probes FASTA file.
+        minlen (int): Minimum length of sequences to be padded.
+
+    Returns:
+        None
+    """
     inpangenome = SeqIO.parse(pangenomefa, 'fasta')
     toadd = []
     for pancontig in inpangenome:
@@ -66,6 +86,15 @@ def make_padded_probes(pangenomefa,probefasta,minlen):
     logger.info(f"Padding small sequences generated {len(toadd)} additional probes")
 
 def nucleotide_proportions(sequences):
+    """
+    Calculates the nucleotide proportions in a list of sequences.
+
+    Args:
+        sequences (list): List of SeqRecord objects.
+
+    Returns:
+        dict: Dictionary with nucleotide proportions.
+    """
     overallseq = ""
     for i in sequences:
         overallseq += str(i.seq)
@@ -75,6 +104,17 @@ def nucleotide_proportions(sequences):
     return proportions
 
 def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
+    """
+    Filters out genomes with a high proportion of non-standard nucleotides.
+
+    Args:
+        genomes (str): Path to the input genomes FASTA file.
+        outfolder (str): Path to the output folder.
+        maxnonspandard (float): Maximum allowed proportion of non-standard nucleotides.
+
+    Returns:
+        tuple: Path to the filtered genomes file and overall nucleotide proportions.
+    """
     ingenomes = list(SeqIO.parse(genomes, "fasta"))
     outgenomes = []
     excluded = 0
@@ -100,18 +140,38 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     return outpath,overallprops
 
 class RuntimeFormatter(logging.Formatter):
+    """
+    Custom logging formatter to include runtime in log messages.
+    """
     def __init__(self, fmt=None, datefmt=None):
         super().__init__(fmt, datefmt)
         self.start_time = time.time()  # Record the start time
 
     def format(self, record):
+        """
+        Formats the log record to include runtime.
+
+        Args:
+            record (logging.LogRecord): The log record to format.
+
+        Returns:
+            str: The formatted log message.
+        """
         # Calculate elapsed time
         elapsed_time = time.time() - self.start_time
         record.runtime = f"{elapsed_time:.2f}s"  # Add runtime to the record
         return super().format(record)
 
 def make_prefix(args):
+    """
+    Generates a prefix for output files based on input arguments.
 
+    Args:
+        args (argparse.Namespace): The arguments passed to the script.
+
+    Returns:
+        str: The generated prefix.
+    """
     if args.skip_padding:
         pad = "_nopadding"
     else:
@@ -128,6 +188,15 @@ def make_prefix(args):
     return outprefix
 
 def get_pangraphex(osarch):
+    """
+    Determines the appropriate PanGraph executable based on the operating system and architecture.
+
+    Args:
+        osarch (dict): Dictionary containing OS, architecture, and libc information.
+
+    Returns:
+        str: Path to the PanGraph executable.
+    """
     if osarch["os"] == "linux":
         if osarch["arch"] == "arm64":
             if osarch["libc"] == "gnu":
@@ -158,45 +227,78 @@ def get_pangraphex(osarch):
 
 
 def run_pangraph(args):
-    logger.info("Starting pangenome generation with PanGraph")
-    topdir = os.path.dirname(os.path.abspath(__file__))
-    outloc = f"{args.outputfolder}/{args.outputprefix}"
-    pangraph_log = open(outloc + "_pangraph.log", "w")
+    """
+    Runs the PanGraph tool to generate a pangenome graph and associated files.
 
-    osarch = detect_os_arch()
-    pangraphex = get_pangraphex(osarch)
+    Args:
+        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
+
+    Returns:
+        None
+    """
+    logger.info("Starting pangenome generation with PanGraph")
+    topdir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
+    outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for PanGraph files
+    pangraph_log = open(outloc + "_pangraph.log", "w")  # Open a log file for PanGraph output
+
+    osarch = detect_os_arch()  # Detect the operating system and architecture
+    pangraphex = get_pangraphex(osarch)  # Get the appropriate PanGraph executable based on OS and architecture
     cmd = f"""{topdir}/{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {args.input} > {outloc}.json && {topdir}/{pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
-    subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
+    # Construct the command to run PanGraph with the specified parameters
+    subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)  # Execute the command
+
+    # Check if the expected output files are present
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
         if not args.keeplogs:
-            os.remove(outloc + "_pangraph.log")
+            os.remove(outloc + "_pangraph.log")  # Remove the log file if not keeping logs
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
     return
 
-def run_finalprobetools(args,inprobes):
-    outloc = f"{args.outputfolder}/{args.outputprefix}"
-    finalpref = f"{outloc}_probetools_final"
-    finalprobes= f"{finalpref}_probes.fa"
-    topdir = os.path.dirname(os.path.abspath(__file__))
-    probetools_log = open(outloc + "_probetools.log","w")
+def run_finalprobetools(args, inprobes):
+    """
+    Runs the final probe design step using the Probetools tool.
+
+    Args:
+        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
+        inprobes (str): Path to the input probes file.
+
+    Returns:
+        tuple: A tuple containing the path to the final capture file and the total number of probes generated.
+    """
+    outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for Probetools files
+    finalpref = f"{outloc}_probetools_final"  # Define the prefix for final Probetools output files
+    finalprobes = f"{finalpref}_probes.fa"  # Define the path for the final probes file
+    topdir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
+    probetools_log = open(outloc + "_probetools.log", "w")  # Open a log file for Probetools output
+
+    # Construct the command to run Probetools with the specified parameters
     cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {args.input} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
+    subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
-    subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)
-
-
+    # Check if the expected output file is present
     if os.path.exists(finalprobes):
-        shutil.move(finalprobes, inprobes)
-        totaprobes, addedprobes = get_probeno(inprobes, "_round_")
+        shutil.move(finalprobes, inprobes)  # Move the final probes file to the input probes path
+        totaprobes, addedprobes = get_probeno(inprobes, "_round_")  # Get the total and added probes count
         logger.info(f"Generated {addedprobes} additional probes using probetools")
         if not args.keeplogs:
-            os.remove(outloc + "_probetools.log")
-        return f"{finalpref}_capture.pt",totaprobes
+            os.remove(outloc + "_probetools.log")  # Remove the log file if not keeping logs
+        return f"{finalpref}_capture.pt", totaprobes  # Return the final capture file path and total probes count
     else:
         logger.error(f"Probetools output file {finalprobes} not present. Check for error in details probetools log.")
 
+
 def get_clusters(args):
+    """
+    Loads cluster assignments from a file.
+
+    Args:
+        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
+
+    Returns:
+        dict: Dictionary mapping strains to clusters.
+    """
     clusterdict = {}
     cluster = ""
     if args.clustertype == "cdhit":
@@ -216,6 +318,15 @@ def get_clusters(args):
     return clusterdict
 
 def load_capture_data(capture_path):
+    """
+    Loads capture data from a file.
+
+    Args:
+        capture_path (str): Path to the capture data file.
+
+    Returns:
+        dict: Dictionary containing capture data.
+    """
     # print(f'Loading capture data from {capture_path}...')
     with open(capture_path, 'r') as input_file:
         headers, seqs, depths = [], [], []
@@ -250,6 +361,16 @@ def load_capture_data(capture_path):
     return capture_data
 
 def runprobetoolscapture(args,probes):
+    """
+    Runs the Probetools capture step.
+
+    Args:
+        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
+        probes (str): Path to the probes file.
+
+    Returns:
+        str: Path to the capture output file.
+    """
     outloc = args.outputfolder+"/"+args.outputprefix
     current_directory = os.path.dirname(os.path.abspath(__file__))
     capture_log = open(outloc + "_capture.log", "w")
@@ -267,10 +388,32 @@ def runprobetoolscapture(args,probes):
         logger.error(f"Probetools capture output file {outf} not present. Check for error in capture log.")
 
 def get_ambig_count(seq):
+    """
+    Counts the number of ambiguous bases in a sequence.
+
+    Args:
+        seq (str): The nucleotide sequence.
+
+    Returns:
+        int: The number of ambiguous bases.
+    """
     ambig = len([x for x in seq if x not in ["A","T","G","C","a","t","c","g"]])
     return ambig
 
 def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_step,maxambig):
+    """
+    Splits a pangenome into probes of specified length and step size.
+
+    Args:
+        input_fasta (str): Path to the input pangenome FASTA file.
+        output_fasta (str): Path to the output probes FASTA file.
+        probe_length (int): Length of each probe.
+        probe_step (int): Step size for generating probes.
+        maxambig (int): Maximum number of ambiguous bases allowed in a probe.
+
+    Returns:
+        None
+    """
     outprobes = []
     totalprobes = 0
     for record in SeqIO.parse(input_fasta, "fasta"):
@@ -305,6 +448,17 @@ def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_st
     logger.info(f"Extracted {totalprobes} probes from pangenome")
 
 def make_summaries(args,ptcountfile,totalprobes):
+    """
+    Generates summary statistics and plots for probe coverage.
+
+    Args:
+        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
+        ptcountfile (str): Path to the probe count file.
+        totalprobes (int): Total number of probes.
+
+    Returns:
+        None
+    """
     outloc = f"{args.outputfolder}/{args.outputprefix}"
     clusterdict = {}
     if args.clusterassign:
@@ -331,6 +485,12 @@ def make_summaries(args,ptcountfile,totalprobes):
 
 
 def setup_logging():
+    """
+    Sets up logging with a custom formatter to include runtime.
+
+    Returns:
+        logging.Logger: The configured logger.
+    """
     formatter = RuntimeFormatter("%(asctime)s - [Runtime: %(runtime)s] - %(levelname)s - %(message)s")
     formatter.default_time_format = "%Y-%m-%d %H:%M:%S"
     formatter.default_msec_format = ""
@@ -343,6 +503,16 @@ def setup_logging():
     return logger
 
 def get_probeno(probefile,subsetstr=""):
+    """
+    Counts the total number of probes and the number of added probes in a file.
+
+    Args:
+        probefile (str): Path to the probes file.
+        subsetstr (str): Substring to identify added probes.
+
+    Returns:
+        tuple: Total number of probes and number of added probes.
+    """
     outprobes = open(probefile, "r").read().splitlines()
     if subsetstr != "":
         addedprobes = [x for x in outprobes if x.startswith(">") and subsetstr in x]
