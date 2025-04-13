@@ -310,7 +310,7 @@ def run_pangraph(args,filtinput):
     else:
         pangraphex = get_pangraphex(osarch) # TODO may be issues when conda is installed as x86 but running on arm64
         # pangraphex = "/Users/mpay0321/Dropbox/Probe_design_project/pangraph_versions/1.1.0/pangraph-aarch64-apple-darwin"
-        # pangraphex = f"{topdir}/{pangraphex}"
+        pangraphex = f"{topdir}/{pangraphex}"
         cmd = f"""{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
