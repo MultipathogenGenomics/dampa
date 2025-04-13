@@ -17,7 +17,45 @@ from tools.gather_probe_depth_stats import make_stats, make_propsplot, process_c
 from vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
 
 
+def mmseqs_subset(args,filtinput):
+    """
+    run the following commands
+    mmseqs createdb ingenomes.fasta alltypesdb
 
+    mmseqs cluster alltypesdb $pref""DB tmp --min-seq-id mmident -c mmcov
+
+    mmseqs createtsv alltypesdb $pref""DB $pref""cluster.tsv
+
+    mmseqs createsubdb $pref""DB alltypesdb $pref""Dbreps
+
+    mmseqs convert2fasta $pref""DBreps $pref""DB.fasta
+
+    """
+    outloc = f"{args.outputfolder}/{args.outputprefix}"
+    mmseqs_log = open(outloc + "_mmseqs.log", "w")
+
+    cmd = f"mmseqs createdb {filtinput} {outloc}_alltypesdb"
+    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
+    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.mmident} -c {args.mmcov}"
+    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
+    # cmd = f"mmseqs createtsv {outloc}_alltypesdb {outloc}_DB {outloc}_cluster.tsv"
+    # subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
+    cmd = f"mmseqs createsubdb  {outloc}_DB {outloc}_alltypesdb {outloc}_Dbreps"
+    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
+    mmseqsreps = f"{outloc}_reps.fasta"
+    cmd = f"mmseqs convert2fasta {outloc}_Dbreps {mmseqsreps}"
+    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
+
+    if os.path.exists(mmseqsreps):
+        logger.info(f"Mmseqs ran successfully")
+        if not args.keeplogs:
+            os.remove(outloc + "_mmseqs.log")
+        return mmseqsreps
+    else:
+        logger.error(f"mmseqs output file {mmseqsreps} not present. Check for error in capture log.")
+
+
+    return mmseqsreps
 
 def detect_os_arch():
     """
@@ -59,7 +97,7 @@ def detect_os_arch():
     }
 
 
-def make_padded_probes(pangenomefa,probefasta,minlen):
+def make_padded_probes(pangenomefa,probefasta,minlen,probeprefix=""):
     """
     Generates padded probes for sequences in the pangenome that are shorter than a specified length.
 
@@ -79,7 +117,8 @@ def make_padded_probes(pangenomefa,probefasta,minlen):
             if len(rmn) >= minlen:
                 tadd = "T"*(120-len(rmn))
                 newseq = Seq.Seq(tadd + rmn)
-                outpancontig = SeqRecord.SeqRecord(newseq,pancontig.id+"_padded_probe",description="")
+                probeprefixm = str(probeprefix+"_")
+                outpancontig = SeqRecord.SeqRecord(newseq,probeprefixm+pancontig.id+"_padded_probe",description="")
                 toadd.append(outpancontig)
     with open(probefasta, "a") as fasta_file:
         SeqIO.write(toadd, fasta_file, "fasta")
@@ -90,18 +129,28 @@ def nucleotide_proportions(sequences):
     Calculates the nucleotide proportions in a list of sequences.
 
     Args:
-        sequences (list): List of SeqRecord objects.
+        sequences (dict): Dict of SeqRecord objects.
 
     Returns:
         dict: Dictionary with nucleotide proportions.
     """
     overallseq = ""
+
     for i in sequences:
-        overallseq += str(i.seq)
+        try:
+            sequence = sequences[i]
+        except Exception as e:
+            logger.error(e)
+            print(i)
+            print(sequences)
+        overallseq += str(sequence.seq)
     counts = Counter(overallseq)  # Count occurrences of each nucleotide
     total = sum(counts.values())  # Total nucleotides
     proportions = {nt: count / total for nt, count in counts.items()}# Calculate proportions
     return proportions
+
+def to_dict_remove_dups(sequences):
+    return {record.id: record for record in sequences}
 
 def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     """
@@ -115,20 +164,25 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     Returns:
         tuple: Path to the filtered genomes file and overall nucleotide proportions.
     """
-    ingenomes = list(SeqIO.parse(genomes, "fasta"))
+    ingenomes = SeqIO.parse(genomes, "fasta")
+    ingenomes = to_dict_remove_dups(ingenomes)
     outgenomes = []
     excluded = 0
+    included = 0
     overallprops = nucleotide_proportions(ingenomes)
-    for i in ingenomes:
-        props = nucleotide_proportions([i])
+    added = []
+    for id,i in ingenomes.items():
+        props = nucleotide_proportions({id:i})
         allowed = ["N","A","C","G","T","n","a","c","g","t"]
         nonallowed = [x for x in i.seq if x not in allowed]
         propnonstandard = sum([props[x] for x in props if x not in allowed])
 
         i.id = i.id.split(" ")[0]
         i.description = ""
-        if float(propnonstandard) < float(maxnonspandard):
+        if float(propnonstandard) < float(maxnonspandard) and i.id not in added:
             outgenomes.append(i)
+            added.append(i.id)
+            included += 1
         else:
             notallowedstr = ",".join(list(set(nonallowed)))
             logger.info(f"genome {i.id} has non standard chraracters: {notallowedstr} and has been excluded")
@@ -137,7 +191,7 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     outpath = outpath + "_filt.fasta"
     SeqIO.write(outgenomes, outpath, "fasta")
     logger.info(f"total genomes excluded for due to excess non ATGCN nucleotides: {excluded}")
-    return outpath,overallprops
+    return outpath,overallprops,included
 
 class RuntimeFormatter(logging.Formatter):
     """
@@ -226,7 +280,7 @@ def get_pangraphex(osarch):
 
 
 
-def run_pangraph(args):
+def run_pangraph(args,filtinput):
     """
     Runs the PanGraph tool to generate a pangenome graph and associated files.
 
@@ -241,13 +295,24 @@ def run_pangraph(args):
     outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for PanGraph files
     pangraph_log = open(outloc + "_pangraph.log", "w")  # Open a log file for PanGraph output
 
-    osarch = detect_os_arch()  # Detect the operating system and architecture
-    pangraphex = get_pangraphex(osarch)  # Get the appropriate PanGraph executable based on OS and architecture
-    cmd = f"""{topdir}/{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {args.input} > {outloc}.json && {topdir}/{pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
-    # Construct the command to run PanGraph with the specified parameters
-    subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)  # Execute the command
+    osarch = detect_os_arch()
 
-    # Check if the expected output files are present
+    if args.pangraphstrict:
+        adds= " -S"
+    else:
+        adds = ""
+
+    if args.maxdiv and osarch["os"] == "darwin":
+        pangraphex = "tools/pangraph/pangraph-maxdiv-aarch64-darwin"
+        cmd = f"""{topdir}/{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {topdir}/{pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+    elif args.maxdiv and osarch["os"] != "darwin":
+        logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
+    else:
+        pangraphex = get_pangraphex(osarch) # TODO may be issues when conda is installed as x86 but running on arm64
+        # pangraphex = "/Users/mpay0321/Dropbox/Probe_design_project/pangraph_versions/1.1.0/pangraph-aarch64-apple-darwin"
+        # pangraphex = f"{topdir}/{pangraphex}"
+        cmd = f"""{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+    subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
         if not args.keeplogs:
@@ -256,7 +321,7 @@ def run_pangraph(args):
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
     return
 
-def run_finalprobetools(args, inprobes):
+def run_finalprobetools(args, inprobes,originput):
     """
     Runs the final probe design step using the Probetools tool.
 
@@ -272,9 +337,8 @@ def run_finalprobetools(args, inprobes):
     finalprobes = f"{finalpref}_probes.fa"  # Define the path for the final probes file
     topdir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
     probetools_log = open(outloc + "_probetools.log", "w")  # Open a log file for Probetools output
-
     # Construct the command to run Probetools with the specified parameters
-    cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {args.input} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
+    cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {originput} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
     # Check if the expected output file is present
@@ -400,7 +464,7 @@ def get_ambig_count(seq):
     ambig = len([x for x in seq if x not in ["A","T","G","C","a","t","c","g"]])
     return ambig
 
-def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_step,maxambig):
+def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_step,maxambig,probeprefix=""):
     """
     Splits a pangenome into probes of specified length and step size.
 
@@ -440,7 +504,8 @@ def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_st
                     # Create a new SeqRecord for each piece
                     piece_id = f"{seq_id}_piece_{seqno}"
                     seqno+=1
-                    piece_record = SeqRecord.SeqRecord(Seq.Seq(piece),id=piece_id,description="")
+                    probeprefixm = str(probeprefix+"_")
+                    piece_record = SeqRecord.SeqRecord(Seq.Seq(piece),id=probeprefixm+piece_id,description="")
                     outprobes.append(piece_record)
                     totalprobes+=1
     # Write the probes to the output file
@@ -587,16 +652,19 @@ def cleanup(args,filtgenomes):
     else:
         logger.info("Cleaning up temporary files (use --keeptmp to keep pangenome graph and other temporary files)")
         outloc = f"{args.outputfolder}/{args.outputprefix}"
-        os.remove(outloc + "_pangenome.gfa")
-        os.remove(outloc + ".json")
-        os.remove(outloc + "_pangenome.fa")
-        os.remove(outloc + "_probetools_final_long_stats_report.tsv")
-        os.remove(outloc + "_probetools_final_summary_stats_report.tsv")
-        os.remove(outloc + "_probetools_final_capture.pt")
-        os.remove(outloc + "_probetools_final_low_cov_seqs.fa")
+        tormsuffixes = ["_pangenome.gfa",".json","_pangenome.fa",
+                       "_probetools_final_long_stats_report.tsv","_probetools_final_summary_stats_report.tsv",
+                       "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa"]
+        for i in tormsuffixes:
+            if os.path.exists(f"{outloc}+{i}"):
+                os.remove(f"{outloc}+{i}")
         filtgenomesrm=glob.glob(f"{filtgenomes}*")
         for i in filtgenomesrm:
             os.remove(i)
+        mmseqsrm = glob.glob(f"{outloc}_alltypesdb*") + glob.glob(f"{outloc}_DB.*") + glob.glob(f"{outloc}_Dbreps*")
+        for i in mmseqsrm:
+            if os.path.exists(i):
+                os.remove(i)
     logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
 def get_args():
@@ -713,6 +781,7 @@ def get_args():
         pangraphsettings.add_argument("--pangraphalpha", type=float, default=100,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
         pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
         pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
+        pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
 
         probetoolssettings = design.add_argument_group("Probetools settings")
 
@@ -725,6 +794,14 @@ def get_args():
                                         help="probetools -b option, number of probes to design in each iteration")
         probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
 
+        mmseqssettings = design.add_argument_group("mmseqs settings")
+        mmseqssettings.add_argument("--mmseqs_inputno_trigger",
+                                      help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9% identity",type=int,
+                                      default=5000)
+        mmseqssettings.add_argument("--mmident", type=float, default=0.999,
+                                        help="Minimum identity in probe match to target to call probe binding")
+        mmseqssettings.add_argument("--mmcov", type=float, default=1,
+                                        help="Minimum coverage in probe match to target to call probe binding (0-1)")
 
         additionalsettings = design.add_argument_group("Additional settings")
 
@@ -758,6 +835,9 @@ def get_args():
                             help="threshold above which genomes are reported as having too much of their genome not covered by any probes",type=float,default=1)
         additionalsettings.add_argument("--version",
                                         help="print version and exit",
+                                        action='store_true')
+        additionalsettings.add_argument("--maxdiv",
+                                        help="use new maxdiv pangraph version",
                                         action='store_true')
 
         evaluate = subparsers.add_parser("eval", help="Evaluate performance of a probe set against a set of genomes",
@@ -839,20 +919,24 @@ def main():
             args.outputprefix = make_prefix(args)
         args.filtnonstandard = True
 
+        probeprefix = args.input.split("/")[-1].replace(".fasta","").replace(".fa","").replace(".fna","")
+
         logger.info("Filter genomes with too many non standard nucleotides")
 
-        filtgenomes,overallprops = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
-        args.input = filtgenomes
-        run_pangraph(args)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
+        args.input,overallprops,included = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
+        originput = str(args.input)
+        if included > args.mmseqs_inputno_trigger:
+            args.input = mmseqs_subset(args,args.input)
+        run_pangraph(args,args.input)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
         probename = args.outputfolder + "/" + args.outputprefix + "_probes.fasta"
         pangenomefasta = f"{args.outputfolder}/{args.outputprefix}_pangenome.fa"
 
-        split_pangenome_into_probes(pangenomefasta, probename,args.probelen, args.probestep,args.maxambig)
+        split_pangenome_into_probes(pangenomefasta, probename,args.probelen, args.probestep,args.maxambig,probeprefix)
 
         if not args.skip_padding:
-            make_padded_probes(pangenomefasta, probename,args.minlenforpadding)
+            make_padded_probes(pangenomefasta, probename,args.minlenforpadding,probeprefix=probeprefix)
         if not args.skip_probetoolsfinal:
-            finalcaptureout,totalprobes = run_finalprobetools(args,probename)
+            finalcaptureout,totalprobes = run_finalprobetools(args,probename,originput)
             if not args.skipsubambig:
                 subambig(probename,overallprops)
             if not args.skip_summaries:
@@ -864,7 +948,7 @@ def main():
             if not args.skip_summaries:
                 finalcaptureout = runprobetoolscapture(args,probename)
                 make_summaries(args, finalcaptureout,totalprobes)
-        cleanup(args,filtgenomes)
+        cleanup(args,args.input)
         logger.info(f"dampa design finished. Total probes: {totalprobes}")
     elif args.command == "eval":
         if args.version:

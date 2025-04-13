@@ -91,6 +91,8 @@ def make_genome_plots(capdata, pref):
         zipdata = random.sample(zipdata,800)
         totno = 800
     alphaset = float(10)/totno
+    if alphaset > 1:
+        alphaset=0.3
 
     c=0
     plt.figure(figsize=(10, 2))

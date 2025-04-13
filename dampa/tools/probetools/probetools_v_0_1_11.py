@@ -451,6 +451,40 @@ def get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,
 
     return panel_size, panel_cov, capture_data
 
+def lowcovlen(capture_data, k, min_depth, min_length):
+    print(f'Extracting low coverage areas...')
+    # Write low cov seqs to FASTA file
+    outlen = 0
+
+    for header, (seq, depth) in capture_data.items():
+        if len(seq) >= k:
+            low_cov_counter = 0
+            low_cov_start = 0
+            while low_cov_start < len(seq):
+                while low_cov_start < len(seq) and depth[low_cov_start] > min_depth:
+                    low_cov_start += 1
+                low_cov_end = low_cov_start
+                while low_cov_end < len(seq) and depth[low_cov_end] <= min_depth:
+                    low_cov_end += 1
+                low_cov_seq = seq[low_cov_start:low_cov_end]
+                if len(low_cov_seq) > min_length and len(low_cov_seq) >= k:
+                    outlen += len(low_cov_seq)
+                elif len(low_cov_seq) > min_length and len(low_cov_seq) < k:
+                    window_start = low_cov_start - int((k - len(low_cov_seq)) / 2)
+                    window_end = window_start + k
+                    if window_start < 0:
+                        window_end = window_end - window_start
+                        window_start = 0
+                    if window_end > len(seq):
+                        window_start = window_start - window_end + len(seq)
+                        window_end = len(seq)
+                    extended_low_cov_seq = seq[window_start:window_end]
+                    low_cov_counter += 1
+                    outlen += len(extended_low_cov_seq)
+                low_cov_start = low_cov_end
+
+    return outlen
+
 def makeprobeswinput(out_path, name, targets_path, batch_size, max_probes,existingprobes, cov_target, k, cluster_id, step, max_degen,
                 min_depth, min_low_cov_length, min_id, min_capture_length, threads):
     check_input([targets_path])
@@ -459,6 +493,11 @@ def makeprobeswinput(out_path, name, targets_path, batch_size, max_probes,existi
     shutil.copy(existingprobes, final_probes_path)
 
     panel_size, panel_cov,capture_data = get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,min_id, min_capture_length)
+
+    lowcovbp = lowcovlen(capture_data, k, min_depth, min_low_cov_length)
+
+    batch_size = int((lowcovbp/k)*0.3)
+
     # Set variable for counting rounds of incremental probe design
     round_counter = 2
     # Initialize variables for panel size (# probes) and 10th percentile of panel coverage
@@ -648,7 +687,7 @@ def align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, th
     # Create and run terminal command for BLASTn
     threads = 1 if threads == 0 else threads
     terminal_command = (f"blastn -db {targets_path} -query {probes_path} -max_target_seqs {num_targets}"
-                        f" -num_threads {threads} -outfmt 6 -word_size 13 > {blast_path}")
+                        f" -num_threads {threads} -outfmt 6 -word_size 13 -dust no > {blast_path}")
     finished_process = subprocess.run(terminal_command, shell=True)#, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if finished_process.returncode != 0:
         print(f'\nERROR: blastn terminated with errors while aligning probes to target seqs (Error code: {finished_process.returncode}).\n')
