@@ -26,7 +26,7 @@ def main():
     elif module == 'capture':
         print(f'\nProbeTools Capture v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
-        capture(out_path, name, args['-t'], args['-p'], args['-i'], args['-l'], args['-T'])
+        capture(out_path, name, args['-t'], args['-p'], args['-i'], args['-l'], args['-T'],args["-y"])
     elif module == 'getlowcov':
         print(f'\nProbeTools GetLowCov v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
@@ -39,13 +39,13 @@ def main():
         print(f'\nProbeTools MakeProbes v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
         make_probes(out_path, name, args['-t'], args['-b'], args['-m'], args['-c'], args['-k'], args['-i'], args['-s'], args['-d'], 
-                    args['-D'], args['-L'], args['-i'], args['-l'], args['-T'])
+                    args['-D'], args['-L'], args['-i'], args['-l'], args['-T'],args['-y'])
     elif module == 'makeprobeswinput':
         print(f'\nProbeTools MakeProbesWInput v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
         print(args)
         makeprobeswinput(out_path, name, args['-t'], args['-b'], args['-m'],args['-x'], args['-c'], args['-k'], args['-i'], args['-s'], args['-d'],
-                    args['-D'], args['-L'], args['-i'], args['-l'], args['-T'])
+                    args['-D'], args['-L'], args['-i'], args['-l'], args['-T'],args['-y'])
     elif module == 'merge':
         print(f'\nProbeTools Merge v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
@@ -80,7 +80,7 @@ def parse_args(args, version):
         default_arg_values = {'-k': 120, '-s': 1, '-d': 0, '-i': 90, '-p': None, '-n': 'MAX', '-T': 0}
     elif module == 'capture':
         required_args = {'-t', '-p', '-o'}
-        arg_value_types = {'-t': str, '-p': str, '-o':str, '-i': float, '-l': int, '-T': int}
+        arg_value_types = {'-t': str, '-p': str, '-o':str, '-i': float, '-l': int, '-T': int, '-y': str}
         min_arg_values = {'-i': 50, '-l': 1, '-T': 1}
         max_arg_values = {'-i': 100}
         default_arg_values = {'-i': 90, '-l': 60, '-T': 1}
@@ -99,14 +99,14 @@ def parse_args(args, version):
     elif module == 'makeprobes':
         required_args = {'-t', '-b', '-o'}
         arg_value_types = {'-t': str, '-b': int, '-o': str, '-m': int, '-c': float, '-k': int, 
-                           '-s': int, '-d': int, '-D': int, '-L': int, '-i': float, '-l': int, '-T': int}
+                           '-s': int, '-d': int, '-D': int, '-L': int, '-i': float, '-l': int, '-T': int, '-y': str}
         min_arg_values = {'-m': 1, '-c': 0, '-k': 32, '-s': 1, '-d': 0, '-D': 0, '-L': 1, '-i': 50, '-l': 1, '-T': 1}
         max_arg_values = {'-c': 100, '-i': 100}
         default_arg_values = {'-m': 'MAX', '-c': 90, '-k': 120, '-s': 1, '-d': 0, '-D': 0, '-L': 40, '-i': 90, '-l': 60, '-T': 0}
     elif module == 'makeprobeswinput':
         required_args = {'-t', '-b', '-o', '-x'}
         arg_value_types = {'-t': str, '-b': int, '-o': str,'-x': str, '-m': int, '-c': float, '-k': int,
-                           '-s': int, '-d': int, '-D': int, '-L': int, '-i': float, '-l': int, '-T': int}
+                           '-s': int, '-d': int, '-D': int, '-L': int, '-i': float, '-l': int, '-T': int, '-y': str}
         min_arg_values = {'-m': 1, '-c': 0, '-k': 32, '-s': 1, '-d': 0, '-D': 0, '-L': 1, '-i': 50, '-l': 1, '-T': 1}
         max_arg_values = {'-c': 100, '-i': 100}
         default_arg_values = {'-m': 'MAX', '-c': 90, '-k': 120, '-s': 1, '-d': 0, '-D': 0, '-L': 40, '-i': 90, '-l': 60, '-T': 0}
@@ -213,6 +213,7 @@ def print_usage(module, version):
         print(' -i : nucleotide sequence identity (%) threshold used for probe-target alignments (default=90, min=50, max=100)')
         print(' -l : minimum length for probe-target alignments (default=60, min=1)')
         print(' -T : number of threads used by BLASTn for aligning probes to targets (default=1, min=1)\n')
+        print(' -y : run dusting on blast results (default Y)\n')
     elif module == 'getlowcov':
         print(f'\nProbeTools GetLowCov v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
@@ -251,6 +252,7 @@ def print_usage(module, version):
         print(' -L : minimum number of consecutive bases below probe depth threshold to define a low coverage sub-sequence (default=40, min=1)')
         print(' -T : number of threads used by VSEARCH and BLASTn for clustering kmers and aligning'
               f' probes to targets (default=MAX for VSEARCH, default=1 for BLASTn, min=1)\n')
+        print(' -y : run dusting on blast results (default Y)\n')
     elif module == 'makeprobeswinput':
         print(f'\nProbeTools MakeProbes v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
@@ -272,6 +274,7 @@ def print_usage(module, version):
         print(' -L : minimum number of consecutive bases below probe depth threshold to define a low coverage sub-sequence (default=40, min=1)')
         print(' -T : number of threads used by VSEARCH and BLASTn for clustering kmers and aligning'
               f' probes to targets (default=MAX for VSEARCH, default=1 for BLASTn, min=1)\n')
+        print(' -y : run dusting on blast results (default Y)\n')
     elif module == 'merge':
         print(f'\nProbeTools Merge v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
@@ -343,10 +346,10 @@ def cluster_kmers(out_path, name, targets_path, k, cluster_id, step, max_degen, 
     return potential_probes, probes_writen
 
 
-def capture(out_path, name, targets_path, probes_path, min_id, min_length, threads):
+def capture(out_path, name, targets_path, probes_path, min_id, min_length, threads,rundust):
     check_input([targets_path, probes_path])
     blast_path = os.path.join(out_path, name + '_blast_results.tsv')
-    align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, threads)
+    align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, threads,rundust)
     capture_data = create_empty_capture_data(targets_path)
     capture_data = add_BLAST_results_to_capture_data(blast_path, capture_data, min_id, min_length)
     capture_path = os.path.join(out_path, name + '_capture.pt')
@@ -371,7 +374,7 @@ def stats(out_path, name, capture_path):
 
 
 def make_probes(out_path, name, targets_path, batch_size, max_probes, cov_target, k, cluster_id, step, max_degen,
-                min_depth, min_low_cov_length, min_id, min_capture_length, threads):
+                min_depth, min_low_cov_length, min_id, min_capture_length, threads,rundust):
     check_input([targets_path])
     # Set variable for counting rounds of incremental probe design
     round_counter = 0
@@ -412,7 +415,7 @@ def make_probes(out_path, name, targets_path, batch_size, max_probes, cov_target
         # Capture probes against original targets
         blast_path = os.path.join(out_path, name + '_blast_results.tsv')
         new_probes_path = os.path.join(out_path, round_name + '_probes.fa')
-        align_probes_to_targets_with_BLAST(targets_path, new_probes_path, blast_path, threads)
+        align_probes_to_targets_with_BLAST(targets_path, new_probes_path, blast_path, threads,rundust)
         capture_data = add_BLAST_results_to_capture_data(blast_path, capture_data, min_id, min_capture_length)
         print()
         # Append new probes to final panel
@@ -435,14 +438,14 @@ def make_probes(out_path, name, targets_path, batch_size, max_probes, cov_target
     report_path = os.path.join(out_path, name + '_long_stats_report.tsv')
     write_long_report(capture_data, report_path, name)
 
-def get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,min_id, min_capture_length):
+def get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,min_id, min_capture_length,rundust):
     round_name = name + f'_round_1'
     blast_path = os.path.join(out_path, name + '_blast_results.tsv')
     capture_data = create_empty_capture_data(targets_path)
 
     print(targets_path)
 
-    align_probes_to_targets_with_BLAST(targets_path, existingprobes, blast_path, threads)
+    align_probes_to_targets_with_BLAST(targets_path, existingprobes, blast_path, threads,rundust)
     capture_data = add_BLAST_results_to_capture_data(blast_path, capture_data, min_id, min_capture_length)
     panel_cov = calc_cov_percentiles(capture_data, percentiles=(0.1,))[0]
 
@@ -486,13 +489,13 @@ def lowcovlen(capture_data, k, min_depth, min_length):
     return outlen
 
 def makeprobeswinput(out_path, name, targets_path, batch_size, max_probes,existingprobes, cov_target, k, cluster_id, step, max_degen,
-                min_depth, min_low_cov_length, min_id, min_capture_length, threads):
+                min_depth, min_low_cov_length, min_id, min_capture_length, threads,rundust):
     check_input([targets_path])
     check_input([existingprobes])
     final_probes_path = os.path.join(out_path, name + '_probes.fa')
     shutil.copy(existingprobes, final_probes_path)
 
-    panel_size, panel_cov,capture_data = get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,min_id, min_capture_length)
+    panel_size, panel_cov,capture_data = get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,min_id, min_capture_length,rundust)
 
     lowcovbp = lowcovlen(capture_data, k, min_depth, min_low_cov_length)
 
@@ -538,7 +541,7 @@ def makeprobeswinput(out_path, name, targets_path, batch_size, max_probes,existi
         # Capture probes against original targets
         blast_path = os.path.join(out_path, name + '_blast_results.tsv')
         new_probes_path = os.path.join(out_path, round_name + '_probes.fa')
-        align_probes_to_targets_with_BLAST(targets_path, new_probes_path, blast_path, threads)
+        align_probes_to_targets_with_BLAST(targets_path, new_probes_path, blast_path, threads,rundust)
         capture_data = add_BLAST_results_to_capture_data(blast_path, capture_data, min_id, min_capture_length)
         print()
         # Append new probes to final panel
@@ -665,7 +668,7 @@ def write_top_probes(probe_names, probe_seqs, num_probes, probes_path, name):
 
 
 ########## capture functions ##########
-def align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, threads):
+def align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, threads,rundust):
     print(f'Aligning probes in {probes_path} to targets in {targets_path}...')
     print(probes_path)
     print(targets_path)
@@ -686,8 +689,12 @@ def align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, th
     num_targets = len(seqs)
     # Create and run terminal command for BLASTn
     threads = 1 if threads == 0 else threads
+    if rundust == "N":
+        dust=" -dust no"
+    else:
+        dust=""
     terminal_command = (f"blastn -db {targets_path} -query {probes_path} -max_target_seqs {num_targets}"
-                        f" -num_threads {threads} -outfmt 6 -word_size 13 -dust no > {blast_path}")
+                        f" -num_threads {threads} -outfmt 6 -word_size 13{dust} > {blast_path}")
     finished_process = subprocess.run(terminal_command, shell=True)#, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if finished_process.returncode != 0:
         print(f'\nERROR: blastn terminated with errors while aligning probes to target seqs (Error code: {finished_process.returncode}).\n')

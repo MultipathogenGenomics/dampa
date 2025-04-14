@@ -338,7 +338,13 @@ def run_finalprobetools(args, inprobes,originput):
     topdir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
     probetools_log = open(outloc + "_probetools.log", "w")  # Open a log file for Probetools output
     # Construct the command to run Probetools with the specified parameters
-    cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {originput} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
+
+    if args.nodust:
+        dust=" -y Y"
+    else:
+        dust=" -y N"
+
+    cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {originput}{dust} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
     # Check if the expected output file is present
@@ -439,8 +445,13 @@ def runprobetoolscapture(args,probes):
     current_directory = os.path.dirname(os.path.abspath(__file__))
     capture_log = open(outloc + "_capture.log", "w")
     with open(os.devnull, 'w') as devnull:
+        if args.nodust:
+            dust = " -y Y"
+        else:
+            dust = " -y N"
+
         # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
-        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11.py capture -t {args.input} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
+        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11.py capture -t {args.input}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{args.outputfolder}/{args.outputprefix}_capture.pt"
     if os.path.exists(outf):
@@ -793,6 +804,7 @@ def get_args():
         probetoolssettings.add_argument("--probetoolsbatch", type=int, default=100,
                                         help="probetools -b option, number of probes to design in each iteration")
         probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
+        probetoolssettings.add_argument("--nodust", help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",action='store_true')
 
         mmseqssettings = design.add_argument_group("mmseqs settings")
         mmseqssettings.add_argument("--mmseqs_inputno_trigger",
