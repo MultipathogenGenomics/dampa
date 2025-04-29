@@ -340,9 +340,9 @@ def run_finalprobetools(args, inprobes,originput):
     # Construct the command to run Probetools with the specified parameters
 
     if args.nodust:
-        dust=" -y Y"
-    else:
         dust=" -y N"
+    else:
+        dust=" -y Y"
 
     cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {originput}{dust} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
@@ -756,7 +756,7 @@ def get_args():
         return args
     else:
         cwd = Path.cwd()
-        parser = argparse.ArgumentParser(description="PanProbe - probe panel design using pangenome graphs",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+        parser = argparse.ArgumentParser(description="DAMPA: Diversity Aware Metagenomic Panel Assignment",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
         design = subparsers.add_parser("design", help="Design probes from input genomes",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
@@ -884,6 +884,9 @@ def get_args():
         probetooleval.add_argument("--probetoolsidentity", type=int, default=85,
                                         help="Minimum identity in probe match to target to call probe binding")
         probetooleval.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
+        probetooleval.add_argument("--nodust",
+                                        help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",
+                                        action='store_true')
 
         additionaleval= evaluate.add_argument_group("Additional settings")
 
