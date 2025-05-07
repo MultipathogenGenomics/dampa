@@ -673,218 +673,159 @@ def get_args():
                                              ' does not exist or is not a file or directory.')
         return Mypath
 
-    debug = True
-    if debug:
-        parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        args = parser.parse_args()
-        ## DESIGN
-        args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025_species_initial_dampa_analysis/2025-02-17_panprobe_w_probetools_results/jev/ref/all_jev_shorthead.fasta"
-        args.clusterassign = False
-        args.threads = 10
-        args.maxnonspandard =0.01
-        args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/dampa_testing/2025-04-02_tmp_remove/"
-        args.outputprefix="jev_tmprmtest"
-        args.probelen = 120
-        args.probestep = 120
-        args.skipsubambig = False
-        args.pangraphident = 20
-        args.pangraphalpha = 100
-        args.pangraphbeta = 10
-        args.pangraphlen = 90
-        args.probetoolsidentity = 85
-        args.probetoolsalignmin = 90
-        args.probetools0covnmin = 20
-        args.maxambig = 10
-        args.skip_padding = False
-        args.padding_nuc = 'T'
-        args.minlenforpadding = 90
-        args.skip_probetoolsfinal = False
-        args.threads = 10
-        args.keeplogs = False
-        args.skip_summaries = False
-        args.maxdepth_describe = 1
-        args.report0covperc = 1
-        args.version = False
-        args.command = "design"
-        args.keeptmp = False
-        args.mmseqs_inputno_trigger =5000
-        args.mmident=0.999
-        args.mmcov=1
-        args.pangraphstrict = False
-        args.maxdiv = False
-        args.nodust = False
 
-        # args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch_capture.pt"
-        # args.inputtype = "capture"
-        # args.probes = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch.fasta"
-        # args.clusterassign = False
-        # args.clustertype="tabular"
-        # args.threads = 10
-        # args.maxnonspandard =0.01
-        # args.outputfolder="/Users/mpay0321/Dropbox/Probe_design_project/2025_02_19_probetools_dontcountN/"
-        # args.outputprefix="denguetest"
-        # args.filtnonstandard=True
-        # args.probetoolsidentity = 85
-        # args.probetoolsalignmin = 90
-        # args.keeplogs = False
-        # args.maxdepth_describe = 1
-        # args.report0covperc = 1
-        # args.version = False
-        # args.command = "eval"
 
-        return args
-    else:
-        cwd = Path.cwd()
-        parser = argparse.ArgumentParser(description="DAMPA: Diversity Aware Metagenomic Panel Assignment",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-        subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
+    cwd = Path.cwd()
+    parser = argparse.ArgumentParser(description="DAMPA: Diversity Aware Metagenomic Panel Assignment",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    subparsers = parser.add_subparsers(dest="command", required=True, help="Available commands")
 
-        design = subparsers.add_parser("design", help="Design probes from input genomes",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    design = subparsers.add_parser("design", help="Design probes from input genomes",formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-        design_inputs = design.add_argument_group("Input/Output options")
+    design_inputs = design.add_argument_group("Input/Output options")
 
-        design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=DirorFolder)
-        design_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
-                            type=File)
-        design_inputs.add_argument("--clustertype",
-                            help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['cdhit','tabular'],
-                            default='tabular')
-        design_inputs.add_argument("--maxnonspandard",
-                            help="maximum proportion of genome that can be non ATGC (0-1)",type=float,default=0.01)
+    design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=DirorFolder)
+    design_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
+                        type=File)
+    design_inputs.add_argument("--clustertype",
+                        help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['cdhit','tabular'],
+                        default='tabular')
+    design_inputs.add_argument("--maxnonspandard",
+                        help="maximum proportion of genome that can be non ATGC (0-1)",type=float,default=0.01)
 
-        design_inputs.add_argument("-o", "--outputfolder", type=Dir,
-                            help="path to output folder",default=f"{cwd}/")
-        design_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
-                            help="prefix for all output files and folders")
+    design_inputs.add_argument("-o", "--outputfolder", type=Dir,
+                        help="path to output folder",default=f"{cwd}/")
+    design_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
+                        help="prefix for all output files and folders")
 
-        general = design.add_argument_group("General settings")
+    general = design.add_argument_group("General settings")
 
-        general.add_argument("-l", "--probelen", type=int, default=120,help="length of output probes")
-        general.add_argument("-s", "--probestep", type=int, default=120, help="step of probes (for no overlap set to same as probelen)")
-        general.add_argument("--skipsubambig",
-                            help="do NOT substitute ambiguous nucleotides (by default N or other ambiguous nucleotides are substituted for ATGC in a random selection weighted by proportions in input genomes",action='store_true')
+    general.add_argument("-l", "--probelen", type=int, default=120,help="length of output probes")
+    general.add_argument("-s", "--probestep", type=int, default=120, help="step of probes (for no overlap set to same as probelen)")
+    general.add_argument("--skipsubambig",
+                        help="do NOT substitute ambiguous nucleotides (by default N or other ambiguous nucleotides are substituted for ATGC in a random selection weighted by proportions in input genomes",action='store_true')
 
 
 
-        pangraphsettings = design.add_argument_group("Pangraph settings")
+    pangraphsettings = design.add_argument_group("Pangraph settings")
 
-        pangraphsettings.add_argument("--pangraphident", type=int, default=20,choices=[5,10,20],help="Pangenome percentage identity setting allowable values are 5,10 or 20")
-        pangraphsettings.add_argument("--pangraphalpha", type=float, default=100,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
-        pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
-        pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
-        pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
+    pangraphsettings.add_argument("--pangraphident", type=int, default=20,choices=[5,10,20],help="Pangenome percentage identity setting allowable values are 5,10 or 20")
+    pangraphsettings.add_argument("--pangraphalpha", type=float, default=100,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
+    pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
+    pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
+    pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
 
-        probetoolssettings = design.add_argument_group("Probetools settings")
+    probetoolssettings = design.add_argument_group("Probetools settings")
 
-        probetoolssettings.add_argument("--probetoolsidentity", type=int, default=85,
-                                        help="Minimum identity in probe match to target to call probe binding")
-        probetoolssettings.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
-        probetoolssettings.add_argument("--probetools0covnmin", type=int, default=20,
-                                        help="Minimum length (bp) of 0 coverage region in input genomes to trigger design of additional probes")
-        probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
-        probetoolssettings.add_argument("--nodust", help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",action='store_true')
+    probetoolssettings.add_argument("--probetoolsidentity", type=int, default=85,
+                                    help="Minimum identity in probe match to target to call probe binding")
+    probetoolssettings.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
+    probetoolssettings.add_argument("--probetools0covnmin", type=int, default=20,
+                                    help="Minimum length (bp) of 0 coverage region in input genomes to trigger design of additional probes")
+    probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
+    probetoolssettings.add_argument("--nodust", help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",action='store_true')
 
-        mmseqssettings = design.add_argument_group("mmseqs settings")
-        mmseqssettings.add_argument("--mmseqs_inputno_trigger",
-                                      help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9% identity",type=int,
-                                      default=5000)
-        mmseqssettings.add_argument("--mmident", type=float, default=0.999,
-                                        help="Minimum identity to cluster genomes")
-        mmseqssettings.add_argument("--mmcov", type=float, default=1,
-                                        help="Minimum coverage of genomes over which mmident must apply (0-1)")
+    mmseqssettings = design.add_argument_group("mmseqs settings")
+    mmseqssettings.add_argument("--mmseqs_inputno_trigger",
+                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9% identity",type=int,
+                                  default=5000)
+    mmseqssettings.add_argument("--mmident", type=float, default=0.999,
+                                    help="Minimum identity to cluster genomes")
+    mmseqssettings.add_argument("--mmcov", type=float, default=1,
+                                    help="Minimum coverage of genomes over which mmident must apply (0-1)")
 
-        additionalsettings = design.add_argument_group("Additional settings")
+    additionalsettings = design.add_argument_group("Additional settings")
 
-        additionalsettings.add_argument("--skip_padding",
-                            help="do not generate additional probes for pangenome nodes between pangraphlen and probelen in length. i.e. if padding is run 30*T would be added to the end of a 90bp pancontig",action='store_true')
-        additionalsettings.add_argument("--padding_nuc",
-                            help="nucleotide to use for padding probes to args.probelen", choices=['A',"T","C","G"],
-                            default='T')
-        additionalsettings.add_argument("--minlenforpadding",
-                            help="minimum length for a pancontig for it to be padded (WARNING setting this below ~80 may result in probes that do not effectively bind, leave these small sequences for final probetools step)", type=int,
-                            default='90')
-        additionalsettings.add_argument("--skip_probetoolsfinal",
-                            help="do NOT run final probe design step. i.e. this step uses probetools to design probes to regions that are not represented in the pangenome",action='store_true')
+    additionalsettings.add_argument("--skip_padding",
+                        help="do not generate additional probes for pangenome nodes between pangraphlen and probelen in length. i.e. if padding is run 30*T would be added to the end of a 90bp pancontig",action='store_true')
+    additionalsettings.add_argument("--padding_nuc",
+                        help="nucleotide to use for padding probes to args.probelen", choices=['A',"T","C","G"],
+                        default='T')
+    additionalsettings.add_argument("--minlenforpadding",
+                        help="minimum length for a pancontig for it to be padded (WARNING setting this below ~80 may result in probes that do not effectively bind, leave these small sequences for final probetools step)", type=int,
+                        default='90')
+    additionalsettings.add_argument("--skip_probetoolsfinal",
+                        help="do NOT run final probe design step. i.e. this step uses probetools to design probes to regions that are not represented in the pangenome",action='store_true')
 
 
-        additionalsettings.add_argument("-t","--threads",
-                                help="number of threads",
-                                type=int,
-                                default=1)
-        additionalsettings.add_argument("--keeplogs",
-                            help="keep logs containing output from pangraph and probetools",action='store_true')
-        additionalsettings.add_argument("--keeptmp",
-                            help="keep intermediate files from pangraph and probetools",action='store_true')
-        additionalsettings.add_argument("--skip_summaries",
-                            help="do NOT run visualisation generaton of dampa probes relative to input genomes",action='store_true')
-        additionalsettings.add_argument("--maxdepth_describe",
-                            default=1,help="Maximum depth of probe coverage to describe separately. i.e. if 1 there will be 0,1 and >1 depth categories")
-        additionalsettings.add_argument("--report0covperc",
-                            help="threshold above which genomes are reported as having too much of their genome not covered by any probes",type=float,default=1)
-        additionalsettings.add_argument("--version",
-                                        help="print version and exit",
-                                        action='store_true')
-        additionalsettings.add_argument("--maxdiv",
-                                        help="use new maxdiv pangraph version",
-                                        action='store_true')
+    additionalsettings.add_argument("-t","--threads",
+                            help="number of threads",
+                            type=int,
+                            default=1)
+    additionalsettings.add_argument("--keeplogs",
+                        help="keep logs containing output from pangraph and probetools",action='store_true')
+    additionalsettings.add_argument("--keeptmp",
+                        help="keep intermediate files from pangraph and probetools",action='store_true')
+    additionalsettings.add_argument("--skip_summaries",
+                        help="do NOT run visualisation generaton of dampa probes relative to input genomes",action='store_true')
+    additionalsettings.add_argument("--maxdepth_describe",
+                        default=1,help="Maximum depth of probe coverage to describe separately. i.e. if 1 there will be 0,1 and >1 depth categories")
+    additionalsettings.add_argument("--report0covperc",
+                        help="threshold above which genomes are reported as having too much of their genome not covered by any probes",type=float,default=1)
+    additionalsettings.add_argument("--version",
+                                    help="print version and exit",
+                                    action='store_true')
+    additionalsettings.add_argument("--maxdiv",
+                                    help="use new maxdiv pangraph version",
+                                    action='store_true')
 
-        evaluate = subparsers.add_parser("eval", help="Evaluate performance of a probe set against a set of genomes",
-                                       formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    evaluate = subparsers.add_parser("eval", help="Evaluate performance of a probe set against a set of genomes",
+                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
-        eval_inputs = evaluate.add_argument_group("Input/Output options")
+    eval_inputs = evaluate.add_argument_group("Input/Output options")
 
-        eval_inputs.add_argument("-g", "--input", required=True, help="Genomes to check probe coverage. \n"
-                                                                      "If genomes either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)\n"
-                                                                      "If capture file then a pt file from a previous pangraph design or pangraph eval run",type=DirorFolder)
-        eval_inputs.add_argument("--inputtype",
-                            help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['genomes','capture'],
-                            default='genomes')
-        eval_inputs.add_argument("-q", "--probes", required=True,
-                                 help="Fasta file containing probes to evaluate (files must end in .fna, .fa or .fasta)",
-                                 type=File)
-        eval_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
-                            type=File)
-        eval_inputs.add_argument("--clustertype",
-                            help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['cdhit','tabular'],
-                            default='tabular')
-        eval_inputs.add_argument("--filtnonstandard",
-                            help="remove genomes with non standard nucleotides i.e. not A,T,G,C or N",action='store_true')
+    eval_inputs.add_argument("-g", "--input", required=True, help="Genomes to check probe coverage. \n"
+                                                                  "If genomes either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)\n"
+                                                                  "If capture file then a pt file from a previous pangraph design or pangraph eval run",type=DirorFolder)
+    eval_inputs.add_argument("--inputtype",
+                        help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['genomes','capture'],
+                        default='genomes')
+    eval_inputs.add_argument("-q", "--probes", required=True,
+                             help="Fasta file containing probes to evaluate (files must end in .fna, .fa or .fasta)",
+                             type=File)
+    eval_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
+                        type=File)
+    eval_inputs.add_argument("--clustertype",
+                        help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['cdhit','tabular'],
+                        default='tabular')
+    eval_inputs.add_argument("--filtnonstandard",
+                        help="remove genomes with non standard nucleotides i.e. not A,T,G,C or N",action='store_true')
 
-        eval_inputs.add_argument("-o", "--outputfolder", type=Dir,
-                            help="path to output folder",default=f"{cwd}/")
-        eval_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
-                            help="prefix for all output files and folders")
+    eval_inputs.add_argument("-o", "--outputfolder", type=Dir,
+                        help="path to output folder",default=f"{cwd}/")
+    eval_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
+                        help="prefix for all output files and folders")
 
-        probetooleval = evaluate.add_argument_group("Probetools settings")
+    probetooleval = evaluate.add_argument_group("Probetools settings")
 
-        probetooleval.add_argument("--probetoolsidentity", type=int, default=85,
-                                        help="Minimum identity in probe match to target to call probe binding")
-        probetooleval.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
-        probetooleval.add_argument("--nodust",
-                                        help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",
-                                        action='store_true')
+    probetooleval.add_argument("--probetoolsidentity", type=int, default=85,
+                                    help="Minimum identity in probe match to target to call probe binding")
+    probetooleval.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
+    probetooleval.add_argument("--nodust",
+                                    help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",
+                                    action='store_true')
 
-        additionaleval= evaluate.add_argument_group("Additional settings")
+    additionaleval= evaluate.add_argument_group("Additional settings")
 
-        additionaleval.add_argument("-t","--threads",
-                                help="number of threads",
-                                type=int,
-                                default=1)
-        additionaleval.add_argument("--keeplogs",
-                            help="keep logs containing output from pangraph and probetools",action='store_true')
+    additionaleval.add_argument("-t","--threads",
+                            help="number of threads",
+                            type=int,
+                            default=1)
+    additionaleval.add_argument("--keeplogs",
+                        help="keep logs containing output from pangraph and probetools",action='store_true')
 
-        additionaleval.add_argument("--maxdepth_describe",
-                                        default=1,
-                                        help="Maximum depth of probe coverage to describe separately. i.e. if 1 there will be 0,1 and >1 depth categories")
-        additionaleval.add_argument("--report0covperc",
-                                        help="threshold above which genomes are reported as having too much of their genome not covered by any probes",
-                                        type=float, default=1)
-        additionaleval.add_argument("--version",
-                                        help="print version and exit",
-                                        action='store_true')
+    additionaleval.add_argument("--maxdepth_describe",
+                                    default=1,
+                                    help="Maximum depth of probe coverage to describe separately. i.e. if 1 there will be 0,1 and >1 depth categories")
+    additionaleval.add_argument("--report0covperc",
+                                    help="threshold above which genomes are reported as having too much of their genome not covered by any probes",
+                                    type=float, default=1)
+    additionaleval.add_argument("--version",
+                                    help="print version and exit",
+                                    action='store_true')
 
-        args = parser.parse_args()
+    args = parser.parse_args()
 
-        return args
+    return args
 
 def main():
     """
