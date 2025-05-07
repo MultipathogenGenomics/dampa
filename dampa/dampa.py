@@ -218,31 +218,6 @@ class RuntimeFormatter(logging.Formatter):
         record.runtime = f"{elapsed_time:.2f}s"  # Add runtime to the record
         return super().format(record)
 
-def make_prefix(args):
-    """
-    Generates a prefix for output files based on input arguments.
-
-    Args:
-        args (argparse.Namespace): The arguments passed to the script.
-
-    Returns:
-        str: The generated prefix.
-    """
-    if args.skip_padding:
-        pad = "_nopadding"
-    else:
-        pad = ""
-    if args.skip_probetoolsfinal:
-        ptf = "_noprobetools"
-    else:
-        ptf = ""
-
-    outname = args.input.split("/")[-1].replace(".fasta","").replace(".fa","").replace(".fna","")
-
-    outprefix = f"{outname}_probelen{args.probelen}_probestep{args.probestep}_i{args.pangraphident}_a{args.pangraphalpha}_b{args.pangraphbeta}_{args.pangraphlen}min{pad}{ptf}"
-
-    return outprefix
-
 def get_pangraphex(osarch):
     """
     Determines the appropriate PanGraph executable based on the operating system and architecture.
@@ -345,7 +320,7 @@ def run_finalprobetools(args, inprobes,originput):
     else:
         dust=" -y Y"
     probetoolspath = importlib.resources.files("dampa").joinpath("tools/probetools/probetools_v_0_1_11_mod.py")
-    cmd = f"python {probetoolspath} makeprobeswinput -t {originput}{dust} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
+    cmd = f"python {probetoolspath} makeprobeswinput -t {originput}{dust} -b 100 -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
     # Check if the expected output file is present
@@ -719,13 +694,11 @@ def get_args():
         args.probetoolsidentity = 85
         args.probetoolsalignmin = 90
         args.probetools0covnmin = 20
-        args.probetoolsbatch = 100
         args.maxambig = 10
         args.skip_padding = False
         args.padding_nuc = 'T'
         args.minlenforpadding = 90
         args.skip_probetoolsfinal = False
-        args.genprefix = False
         args.threads = 10
         args.keeplogs = False
         args.skip_summaries = False
@@ -807,8 +780,6 @@ def get_args():
         probetoolssettings.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
         probetoolssettings.add_argument("--probetools0covnmin", type=int, default=20,
                                         help="Minimum length (bp) of 0 coverage region in input genomes to trigger design of additional probes")
-        probetoolssettings.add_argument("--probetoolsbatch", type=int, default=100,
-                                        help="probetools -b option, number of probes to design in each iteration")
         probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
         probetoolssettings.add_argument("--nodust", help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",action='store_true')
 
@@ -834,8 +805,6 @@ def get_args():
         additionalsettings.add_argument("--skip_probetoolsfinal",
                             help="do NOT run final probe design step. i.e. this step uses probetools to design probes to regions that are not represented in the pangenome",action='store_true')
 
-        additionalsettings.add_argument("--genprefix",
-                            help="generate output prefix from input names and settings",action='store_true')
 
         additionalsettings.add_argument("-t","--threads",
                                 help="number of threads",
@@ -936,8 +905,6 @@ def main():
             print(f"version {version}")
             sys.exit(0)
         logger.info("Running dampa design")
-        if args.genprefix:
-            args.outputprefix = make_prefix(args)
         args.filtnonstandard = True
 
         probeprefix = args.input.split("/")[-1].replace(".fasta","").replace(".fa","").replace(".fna","")
