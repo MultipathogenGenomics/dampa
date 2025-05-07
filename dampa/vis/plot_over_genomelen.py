@@ -93,16 +93,16 @@ def make_genome_plots(capdata, pref):
     alphaset = float(10)/totno
     if alphaset > 1:
         alphaset=0.3
-
-    c=0
-    plt.figure(figsize=(10, 2))
-    for data in zipdata:
-        # print(name)
-        depths = data[0]
-        # make_coloured_line(range(len(depths)),depths,alphaset)
-        sns.lineplot(x=range(len(depths)),y=depths,alpha=alphaset,color='blue')
-    plt.axhline(y=1, color='black', linestyle='--',zorder=0,alpha=0.3)
-    plt.savefig(f"{pref}_genomecov.pdf")
+    #
+    # c=0
+    # plt.figure(figsize=(10, 2))
+    # for data in zipdata:
+    #     # print(name)
+    #     depths = data[0]
+    #     # make_coloured_line(range(len(depths)),depths,alphaset)
+    #     sns.lineplot(x=range(len(depths)),y=depths,alpha=alphaset,color='blue')
+    # plt.axhline(y=1, color='black', linestyle='--',zorder=0,alpha=0.3)
+    # plt.savefig(f"{pref}_genomecov.pdf")
 
 
     plt.clf()

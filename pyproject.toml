@@ -1,0 +1,47 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dampa"
+version = "0.1.0"  # Replace with the actual version
+authors = [
+    {name = "Michael Payne", email = "michael.payne@sydney.edu.au"}
+]
+description = "Diversity Aware Metagenomic Panel Assignment"
+readme = "README.md"
+license = {text = "MIT"}
+classifiers = [
+    "License :: OSI Approved :: MIT",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Bio-Informatics",
+    "Topic :: Scientific/Engineering :: Medical Science Apps.",
+    "Intended Audience :: Science/Research"
+]
+requires-python = ">=3.10"
+dependencies = [
+    "pandas",
+    "biopython",
+    "matplotlib",
+    "seaborn",
+]
+
+[project.urls]
+Homepage = "https://github.com/MultipathogenGenomics/dampa"
+
+[project.scripts]
+dampa = "dampa.dampa:main"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "error"
+]
+
+[tool.setuptools]
+packages = ["dampa"]
+
+[tool.setuptools.package-data]
+"dampa" = ["tools/pangraph/*","tools/probetools/probetools_v_0_1_11_mod.py"]
+
+[tool.mypy]
+warn_unused_configs = true

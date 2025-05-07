@@ -1,2 +1,4 @@
+global-include dampa/*
+recursive-include dampa/tools *
 graft dampa/tools
 graft dampa/vis

@@ -13,8 +13,10 @@ from collections import Counter
 import platform
 import subprocess
 import glob
-from tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
-from vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
+import importlib.resources
+# from tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
+from dampa.vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
+from dampa.tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
 
 
 def mmseqs_subset(args,filtinput):
@@ -254,27 +256,27 @@ def get_pangraphex(osarch):
     if osarch["os"] == "linux":
         if osarch["arch"] == "arm64":
             if osarch["libc"] == "gnu":
-                return "tools/pangraph/pangraph-aarch64-linux-gnu"
+                return "pangraph-aarch64-linux-gnu"
             elif osarch["libc"] == "musl":
-                return "tools/pangraph/pangraph-aarch64-linux-musl"
+                return "pangraph-aarch64-linux-musl"
             else:
                 logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
         elif osarch["arch"] == "x86_64":
             if osarch["libc"] == "gnu":
-                return "tools/pangraph/pangraph-x86_64-linux-gnu"
+                return "pangraph-x86_64-linux-gnu"
             elif osarch["libc"] == "musl":
-                return "tools/pangraph/pangraph-x86_64-linux-musl"
+                return "pangraph-x86_64-linux-musl"
             else:
                 logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
     elif osarch["os"] == "darwin":
         if osarch["arch"] == "arm64":
-            return "tools/pangraph/pangraph-aarch64-darwin"
+            return "pangraph-aarch64-darwin"
         elif osarch["arch"] == "x86_64":
-            return "tools/pangraph/pangraph-x86_64-darwin"
+            return "pangraph-x86_64-darwin"
         else:
             logger.error(f"Unsupported os/architecture combination {osarch["os"]}/{osarch['arch']}")
     elif osarch["os"] == "windows":
-        return "tools/pangraph/pangraph-x86_64-pc-windows-gnu.exe"
+        return "pangraph-x86_64-pc-windows-gnu.exe"
     else:
         logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
 
@@ -303,15 +305,15 @@ def run_pangraph(args,filtinput):
         adds = ""
 
     if args.maxdiv and osarch["os"] == "darwin":
-        pangraphex = "tools/pangraph/pangraph-maxdiv-aarch64-darwin"
-        cmd = f"""{topdir}/{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {topdir}/{pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        pangraphex = "pangraph-maxdiv-aarch64-darwin"
+        pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {topdir}/{pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     elif args.maxdiv and osarch["os"] != "darwin":
         logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
     else:
         pangraphex = get_pangraphex(osarch) # TODO may be issues when conda is installed as x86 but running on arm64
-        # pangraphex = "/Users/mpay0321/Dropbox/Probe_design_project/pangraph_versions/1.1.0/pangraph-aarch64-apple-darwin"
-        pangraphex = f"{topdir}/{pangraphex}"
-        cmd = f"""{pangraphex} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphex} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphex} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
@@ -335,7 +337,6 @@ def run_finalprobetools(args, inprobes,originput):
     outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for Probetools files
     finalpref = f"{outloc}_probetools_final"  # Define the prefix for final Probetools output files
     finalprobes = f"{finalpref}_probes.fa"  # Define the path for the final probes file
-    topdir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
     probetools_log = open(outloc + "_probetools.log", "w")  # Open a log file for Probetools output
     # Construct the command to run Probetools with the specified parameters
 
@@ -343,8 +344,8 @@ def run_finalprobetools(args, inprobes,originput):
         dust=" -y N"
     else:
         dust=" -y Y"
-
-    cmd = f"python {topdir}/tools/probetools/probetools_v_0_1_11.py makeprobeswinput -t {originput}{dust} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
+    probetoolspath = importlib.resources.files("dampa").joinpath("tools/probetools/probetools_v_0_1_11_mod.py")
+    cmd = f"python {probetoolspath} makeprobeswinput -t {originput}{dust} -b {args.probetoolsbatch} -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
     # Check if the expected output file is present
@@ -667,8 +668,9 @@ def cleanup(args,filtgenomes):
                        "_probetools_final_long_stats_report.tsv","_probetools_final_summary_stats_report.tsv",
                        "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa"]
         for i in tormsuffixes:
-            if os.path.exists(f"{outloc}+{i}"):
-                os.remove(f"{outloc}+{i}")
+            print(f"{outloc}{i}")
+            if os.path.exists(f"{outloc}{i}"):
+                os.remove(f"{outloc}{i}")
         filtgenomesrm=glob.glob(f"{filtgenomes}*")
         for i in filtgenomesrm:
             os.remove(i)
@@ -696,7 +698,7 @@ def get_args():
                                              ' does not exist or is not a file or directory.')
         return Mypath
 
-    debug = False
+    debug = True
     if debug:
         parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
         args = parser.parse_args()
@@ -732,8 +734,12 @@ def get_args():
         args.version = False
         args.command = "design"
         args.keeptmp = False
-
-        ### EVAL
+        args.mmseqs_inputno_trigger =5000
+        args.mmident=0.999
+        args.mmcov=1
+        args.pangraphstrict = False
+        args.maxdiv = False
+        args.nodust = False
 
         # args.input = "/Users/mpay0321/Dropbox/Probe_design_project/2025-02-17_panprobe_w_probetools_results/dengue/dengue_catch_capture.pt"
         # args.inputtype = "capture"
@@ -811,9 +817,9 @@ def get_args():
                                       help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9% identity",type=int,
                                       default=5000)
         mmseqssettings.add_argument("--mmident", type=float, default=0.999,
-                                        help="Minimum identity in probe match to target to call probe binding")
+                                        help="Minimum identity to cluster genomes")
         mmseqssettings.add_argument("--mmcov", type=float, default=1,
-                                        help="Minimum coverage in probe match to target to call probe binding (0-1)")
+                                        help="Minimum coverage of genomes over which mmident must apply (0-1)")
 
         additionalsettings = design.add_argument_group("Additional settings")
 
