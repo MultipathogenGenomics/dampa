@@ -23,11 +23,25 @@ When designing a probeset for targeted metagenomics, the optimal solution includ
 
 ## Usage
 
+### Quickstart
+#### dampa design
+Design probes for genomes in multifasta
+
+```
+dampa design -g <genomes.fasta> -o <output_folder_path> -p <output_prefix_for_files>
+```
+
+#### dampa eval
+Evaluate probes in multifasta against genomes in multifasta
+
+```
+dampa eval -g <genomes.fasta> -q <probes_to_eval.fasta> -o <output_folder_path> -p <output_prefix_for_files>
+```
+
 ### Design Probes
 dampa design is the core module of dampa used to generate probe sets
-```
-dampa design [options]
-```
+
+`dampa design [options]`
 
 #### Input/Output options
 - `-g, --input`: Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta) (required)
@@ -76,9 +90,7 @@ A pangraph node of length 110 will be padded with 10 Ts to make it 120bp
 
 dampa eval will evaluate the performance of a probe set against a set of genomes and generate summary statistics and visualisations
 
-```
-dampa eval [options]
-```
+`dampa eval [options]`
 
 #### Input/Output options
 - `-g, --input`: Genomes to check probe coverage. If genomes either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta). If capture file then a pt file from a previous pangraph design or pangraph eval run (required)
