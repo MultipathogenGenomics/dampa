@@ -17,6 +17,7 @@ import importlib.resources
 # from tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
 from dampa.vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
 from dampa.tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
+from dampa import __version__ as dampaversion
 
 
 def mmseqs_subset(args,filtinput):
@@ -935,7 +936,6 @@ def main():
     optionally run splitfasta function
     run
     """
-    version = "0.1.0"
     global logger
     logger = setup_logging()
     logger.info("Starting")
@@ -944,7 +944,7 @@ def main():
 
     if args.command == "design":
         if args.version:
-            print(f"version {version}")
+            print(f"version {dampaversion}")
             sys.exit(0)
         logger.info("Running dampa design")
         args.filtnonstandard = True
