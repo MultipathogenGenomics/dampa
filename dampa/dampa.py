@@ -392,8 +392,8 @@ def run_pangraph(args,filtinput):
         logger.info("Pangraph ran successfully")
         if not args.keeplogs:
             os.remove(outloc + "_pangraph.log")
-        # TODO test linear merge more
-        #linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",f"{outloc}_pangenome_lin.fa")# Remove the log file if not keeping logs
+        # TODO improve linear merge (appears to be missing some possible merges)
+        linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",f"{outloc}_pangenome_lin.fa")# Remove the log file if not keeping logs
         logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
@@ -784,7 +784,7 @@ def get_args():
 
     design_inputs = design.add_argument_group("Input/Output options")
 
-    design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=str)
+    design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=DirorFolder)
     design_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
                         type=File)
     design_inputs.add_argument("--clustertype",
@@ -793,7 +793,7 @@ def get_args():
     design_inputs.add_argument("--maxnonspandard",
                         help="maximum proportion of genome that can be non ATGC (0-1)",type=float,default=0.01)
 
-    design_inputs.add_argument("-o", "--outputfolder", type=str,
+    design_inputs.add_argument("-o", "--outputfolder", type=Dir,
                         help="path to output folder",default=f"{cwd}/")
     design_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
                         help="prefix for all output files and folders")
@@ -827,7 +827,7 @@ def get_args():
 
     mmseqssettings = design.add_argument_group("mmseqs settings")
     mmseqssettings.add_argument("--mmseqs_inputno_trigger",
-                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9% identity",type=int,
+                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9 percent identity",type=int,
                                   default=5000)
     mmseqssettings.add_argument("--mmident", type=float, default=0.999,
                                     help="Minimum identity to cluster genomes")
@@ -876,7 +876,7 @@ def get_args():
 
     eval_inputs.add_argument("-g", "--input", required=True, help="Genomes to check probe coverage. \n"
                                                                   "If genomes either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)\n"
-                                                                  "If capture file then a pt file from a previous pangraph design or pangraph eval run",type=str)
+                                                                  "If capture file then a pt file from a previous pangraph design or pangraph eval run",type=DirorFolder)
     eval_inputs.add_argument("--inputtype",
                         help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['genomes','capture'],
                         default='genomes')
@@ -959,7 +959,7 @@ def main():
             args.input = mmseqs_subset(args,args.input)
         run_pangraph(args,args.input)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
         probename = args.outputfolder + "/" + args.outputprefix + "_probes.fasta"
-        pangenomefasta = f"{args.outputfolder}/{args.outputprefix}_pangenome.fa"
+        pangenomefasta = f"{args.outputfolder}/{args.outputprefix}_pangenome_lin.fa"
 
         split_pangenome_into_probes(pangenomefasta, probename,args.probelen, args.probestep,args.maxambig,probeprefix)
 
