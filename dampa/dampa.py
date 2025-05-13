@@ -2,7 +2,7 @@ import random
 import shutil
 from pathlib import Path
 from Bio import SeqIO,SeqRecord,Seq
-
+from collections import defaultdict
 import subprocess
 import argparse
 import os
@@ -178,17 +178,26 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
         allowed = ["N","A","C","G","T","n","a","c","g","t"]
         nonallowed = [x for x in i.seq if x not in allowed]
         propnonstandard = sum([props[x] for x in props if x not in allowed])
-
+        propn = sum([props[x] for x in props if x in ["n","N"]])
         i.id = i.id.split(" ")[0]
         i.description = ""
-        if float(propnonstandard) < float(maxnonspandard) and i.id not in added:
-            outgenomes.append(i)
-            added.append(i.id)
-            included += 1
-        else:
+        seqlen = len(i.seq)
+        if propn > 0.05:
+            logger.info(f"genome {i.id} has excess N and has been excluded")
+            excluded += 1
+        elif float(propnonstandard) >= float(maxnonspandard) and i.id not in added:
             notallowedstr = ",".join(list(set(nonallowed)))
             logger.info(f"genome {i.id} has non standard chraracters: {notallowedstr} and has been excluded")
             excluded += 1
+        elif seqlen < 150:
+            logger.info(f"genome {i.id} is too short ({seqlen}) and has been excluded")
+            excluded += 1
+        else:
+            outgenomes.append(i)
+            added.append(i.id)
+            included += 1
+
+
     outpath = outfolder + "/" + genomes.split("/")[-1].replace(".fasta","").replace(".fa","").replace(".fna","")
     outpath = outpath + "_filt.fasta"
     SeqIO.write(outgenomes, outpath, "fasta")
@@ -256,6 +265,95 @@ def get_pangraphex(osarch):
         logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
 
 
+def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
+    """
+    Merge sequences in a GFA file based on linear transitive chains.
+
+    Args:
+        inp (str): Path to the GFA file.
+        fasta_file (str): Path to the FASTA file containing sequences.
+        outp (str): Path to the output merged FASTA file.
+    """
+
+    # === Step 0: Check input files ===
+    if not os.path.exists(inp):
+        raise FileNotFoundError(f"GFA file {inp} does not exist.")
+    if not os.path.exists(fasta_file):
+        raise FileNotFoundError(f"FASTA file {fasta_file} does not exist.")
+    # === Step 1: Parse the GFA ===
+    gfa_file = inp
+    with open(gfa_file) as f:
+        lines = f.readlines()
+
+    out_edges = defaultdict(list)
+    in_edges = defaultdict(list)
+    links_raw = []
+
+    for line in lines:
+        if line.startswith("L"):
+            parts = line.strip().split("\t")
+            a, a_orient, b, b_orient = parts[1], parts[2], parts[3], parts[4]
+            out_edges[(a, a_orient)].append((b, b_orient))
+            in_edges[(b, b_orient)].append((a, a_orient))
+            links_raw.append(parts)
+
+    # === Step 2: Build forward-only merge chains A + → B + where no other edges touch A+ or B+
+    visited = set()
+    merge_chains = []
+
+    for (node, orient) in out_edges:
+        if orient != '+':
+            continue
+        if (node in visited) or len(out_edges[(node, '+')]) != 1:
+            continue
+
+        next_node, next_orient = out_edges[(node, '+')][0]
+        if next_orient != '+' or len(in_edges[(next_node, '+')]) != 1:
+            continue
+
+        # Walk forward to find full chain
+        chain = [node]
+        current = next_node
+        while True:
+            if current in chain:
+                break  # avoid cycles
+            if len(in_edges[(current, '+')]) == 1 and len(out_edges.get((current, '+'), [])) == 1:
+                next_target, next_target_orient = out_edges[(current, '+')][0]
+                if next_target_orient != '+' or len(in_edges[(next_target, '+')]) != 1:
+                    break
+                chain.append(current)
+                current = next_target
+            else:
+                chain.append(current)
+                break
+
+        # Register all nodes in the chain
+        for n in chain:
+            visited.add(n)
+        if len(chain) > 1:
+            merge_chains.append(chain)
+
+    # === Step 3: Read FASTA and merge chains ===
+
+    records = SeqIO.to_dict(SeqIO.parse(fasta_file, "fasta"))
+
+    # Build merged sequences
+    merged_records = []
+    used_nodes = set()
+
+    for chain in merge_chains:
+        merged_id = "_".join(chain)
+        merged_seq = Seq.Seq("").join([records[n].seq for n in chain])
+        merged_records.append(SeqRecord.SeqRecord(merged_seq, id=merged_id, description=""))
+        used_nodes.update(chain)
+
+    # Add unmerged records
+    unmerged_records = [rec for name, rec in records.items() if name not in used_nodes]
+
+    # Write output
+    output_file = outp
+    SeqIO.write(unmerged_records + merged_records, output_file, "fasta")
+    return output_file
 
 def run_pangraph(args,filtinput):
     """
@@ -293,7 +391,10 @@ def run_pangraph(args,filtinput):
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
         if not args.keeplogs:
-            os.remove(outloc + "_pangraph.log")  # Remove the log file if not keeping logs
+            os.remove(outloc + "_pangraph.log")
+        # TODO test linear merge more
+        #linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",f"{outloc}_pangenome_lin.fa")# Remove the log file if not keeping logs
+        logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
     return
@@ -683,7 +784,7 @@ def get_args():
 
     design_inputs = design.add_argument_group("Input/Output options")
 
-    design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=DirorFolder)
+    design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=str)
     design_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
                         type=File)
     design_inputs.add_argument("--clustertype",
@@ -692,7 +793,7 @@ def get_args():
     design_inputs.add_argument("--maxnonspandard",
                         help="maximum proportion of genome that can be non ATGC (0-1)",type=float,default=0.01)
 
-    design_inputs.add_argument("-o", "--outputfolder", type=Dir,
+    design_inputs.add_argument("-o", "--outputfolder", type=str,
                         help="path to output folder",default=f"{cwd}/")
     design_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
                         help="prefix for all output files and folders")
@@ -775,7 +876,7 @@ def get_args():
 
     eval_inputs.add_argument("-g", "--input", required=True, help="Genomes to check probe coverage. \n"
                                                                   "If genomes either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)\n"
-                                                                  "If capture file then a pt file from a previous pangraph design or pangraph eval run",type=DirorFolder)
+                                                                  "If capture file then a pt file from a previous pangraph design or pangraph eval run",type=str)
     eval_inputs.add_argument("--inputtype",
                         help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['genomes','capture'],
                         default='genomes')
