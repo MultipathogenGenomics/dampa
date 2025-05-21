@@ -112,3 +112,27 @@ dampa eval will evaluate the performance of a probe set against a set of genomes
 - `--maxdepth_describe`: Maximum depth of probe coverage to describe separately (default: 1)
 - `--report0covperc`: threshold above which genomes are reported as having too much of their genome not covered by any probes (default: 1)
 - `--version`: print version and exit
+
+
+## Outputs
+
+### Design
+
+#### _probes.fasta
+The final probe set designed by dampa design
+
+#### _pergenome_stats_of_perc_coverage.csv
+For each the proportion of the genome with no probe coverage (0), exactly 1 probe depth (1) and more than one prove depth (>1), also the mean coverage depth across the genome. By default coverage is calculated by finding blast hits of probes in the genome with over 90bp length and 85% identity.
+
+#### _summary_stats_of_perc_coverage.csv
+Min, Max, Mean and Median of statistics in _pergenome_stats_of_perc_coverage. Additionally a count of total probe numbers and number of genomes that "failed" according to the missing coverage theshold defined with `--report0covperc`
+
+#### _perc_genome_cov_boxplots.pdf
+A plot of each genomes proportion of 0, 1 and >1 genome coverage including a boxplot for each category.
+
+#### _genomecov_lennorm.pdf
+A line plot where each strain is a line that shows probe depth across the genome using a sliding 120bp window. Genomes are normalised for length but not aligned (Truncated genomes may look odd).
+
+### Eval
+Outputs are the same as `dampa design` without _probes.fasta
+
