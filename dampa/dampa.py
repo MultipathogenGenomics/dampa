@@ -743,7 +743,7 @@ def cleanup(args,filtgenomes):
         outloc = f"{args.outputfolder}/{args.outputprefix}"
         tormsuffixes = ["_pangenome.gfa",".json","_pangenome.fa",
                        "_probetools_final_long_stats_report.tsv","_probetools_final_summary_stats_report.tsv",
-                       "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa"]
+                       "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa","_pangenome_lin.fa"]
         for i in tormsuffixes:
             print(f"{outloc}{i}")
             if os.path.exists(f"{outloc}{i}"):
@@ -982,7 +982,7 @@ def main():
         logger.info(f"dampa design finished. Total probes: {totalprobes}")
     elif args.command == "eval":
         if args.version:
-            print(f"version {version}")
+            print(f"version {dampaversion}")
             sys.exit(0)
         logger.info("Running dampa eval")
         totalprobes = get_probeno(args.probes)[0]
@@ -991,6 +991,7 @@ def main():
         else:
             finalcaptureout = args.input
         make_summaries(args, finalcaptureout,totalprobes)
+        cleanup(args, args.input)
         logger.info("dampa eval finished")
 if __name__ == "__main__":
     main()
