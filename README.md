@@ -17,7 +17,6 @@ When designing a probeset for targeted metagenomics, the optimal solution includ
 
 `conda install -c bioconda -c conda-forge dampa`
 
-[![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/installer/conda.svg)](https://conda.anaconda.org/bioconda)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/downloads.svg)](https://anaconda.org/bioconda/dampa)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/version.svg)](https://anaconda.org/bioconda/dampa)
 
