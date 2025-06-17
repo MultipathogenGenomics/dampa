@@ -707,7 +707,7 @@ def create_empty_capture_data(targets_path):
         headers, seqs = [], []
         for line in input_file:
             if line[0] == '>':
-                header = line.strip().lstrip('>')
+                header = line.strip().lstrip('>').split(" ")[0]
                 headers.append(header)
                 seqs.append('')
             else:
@@ -717,6 +717,7 @@ def create_empty_capture_data(targets_path):
             print(f'\nERROR: Header {header} appears more than once in {targets_path}.\n')
             exit(1)
         if ' ' in header:
+
             print(f'\nERROR: Header {header} contains spaces.\n')
             exit(1)
     capture_data = {header: (seq, [0] * len(seq)) for header, seq in zip(headers, seqs)}

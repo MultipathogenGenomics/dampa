@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "dampa"
-version = "0.1.0"  # Replace with the actual version
+version = "0.1.3"  # Replace with the actual version
 authors = [
     {name = "Michael Payne", email = "michael.payne@sydney.edu.au"}
 ]

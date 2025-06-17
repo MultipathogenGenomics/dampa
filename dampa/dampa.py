@@ -924,6 +924,8 @@ def get_args():
     additionaleval.add_argument("--version",
                                     help="print version and exit",
                                     action='store_true')
+    additionaleval.add_argument("--keeptmp",
+                        help="keep intermediate files from pangraph and probetools",action='store_true')
 
     args = parser.parse_args()
 
