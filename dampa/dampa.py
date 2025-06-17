@@ -529,7 +529,7 @@ def runprobetoolscapture(args,probes):
             dust = " -y N"
 
         # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
-        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11.py capture -t {args.input}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
+        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {args.input}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{args.outputfolder}/{args.outputprefix}_capture.pt"
     if os.path.exists(outf):
