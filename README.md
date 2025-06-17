@@ -15,7 +15,17 @@ When designing a probeset for targeted metagenomics, the optimal solution includ
   
 ## Installation
 
+### conda
+
 `conda install -c bioconda -c conda-forge dampa`
+
+### pip (must have python/pip installed)
+
+`git clone https://github.com/MultipathogenGenomics/dampa.git`
+
+`cd dampa`
+
+`pip install .`
 
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/downloads.svg)](https://anaconda.org/bioconda/dampa)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/version.svg)](https://anaconda.org/bioconda/dampa)
