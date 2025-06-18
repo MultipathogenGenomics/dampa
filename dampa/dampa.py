@@ -39,7 +39,7 @@ def mmseqs_subset(args,filtinput):
 
     cmd = f"mmseqs createdb {filtinput} {outloc}_alltypesdb"
     subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.mmident} -c {args.mmcov}"
+    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.mmident} -c {args.mmcov} --cov-mode 1"
     subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
     # cmd = f"mmseqs createtsv {outloc}_alltypesdb {outloc}_DB {outloc}_cluster.tsv"
     # subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
@@ -381,7 +381,7 @@ def run_pangraph(args,filtinput):
     if args.maxdiv and osarch["os"] == "darwin":
         pangraphex = "pangraph-maxdiv-aarch64-darwin"
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {topdir}/{pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {topdir}/{pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     elif args.maxdiv and osarch["os"] != "darwin":
         logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
     else:
@@ -735,7 +735,7 @@ def subambig(probes,props):
         outprobes.append(probe)
     SeqIO.write(outprobes,probes,"fasta")
 
-def cleanup(args,filtgenomes):
+def cleanup(args,filtgenomes=""):
     if args.keeptmp:
         logger.info("Keeping temporary files")
     else:
@@ -748,9 +748,10 @@ def cleanup(args,filtgenomes):
             print(f"{outloc}{i}")
             if os.path.exists(f"{outloc}{i}"):
                 os.remove(f"{outloc}{i}")
-        filtgenomesrm=glob.glob(f"{filtgenomes}*")
-        for i in filtgenomesrm:
-            os.remove(i)
+        if filtgenomes != "":
+            filtgenomesrm=glob.glob(f"{filtgenomes}*")
+            for i in filtgenomesrm:
+                os.remove(i)
         mmseqsrm = glob.glob(f"{outloc}_alltypesdb*") + glob.glob(f"{outloc}_DB.*") + glob.glob(f"{outloc}_Dbreps*")
         for i in mmseqsrm:
             if os.path.exists(i):
@@ -957,7 +958,9 @@ def main():
 
         args.input,overallprops,included = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
         originput = str(args.input)
+        rminp = False
         if included > args.mmseqs_inputno_trigger:
+            rminp = True
             args.input = mmseqs_subset(args,args.input)
         run_pangraph(args,args.input)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
         probename = args.outputfolder + "/" + args.outputprefix + "_probes.fasta"
@@ -980,7 +983,10 @@ def main():
             if not args.skip_summaries:
                 finalcaptureout = runprobetoolscapture(args,probename)
                 make_summaries(args, finalcaptureout,totalprobes)
-        cleanup(args,args.input)
+        if rminp:
+            cleanup(args,args.input)
+        else:
+            cleanup(args)
         logger.info(f"dampa design finished. Total probes: {totalprobes}")
     elif args.command == "eval":
         if args.version:
@@ -993,7 +999,7 @@ def main():
         else:
             finalcaptureout = args.input
         make_summaries(args, finalcaptureout,totalprobes)
-        cleanup(args, args.input)
+        cleanup(args)
         logger.info("dampa eval finished")
 if __name__ == "__main__":
     main()
