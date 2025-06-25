@@ -60,46 +60,6 @@ def mmseqs_subset(args,filtinput):
 
     return mmseqsreps
 
-def detect_os_arch():
-    """
-        Detects the operating system and architecture of the current machine, and attempts to determine the type of libc used on Linux systems.
-
-    Returns:
-        dict: A dictionary containing the following keys:
-            - "os": The operating system (e.g., "linux", "windows", "darwin").
-            - "arch": The machine architecture (e.g., "x86_64", "arm64").
-            - "libc": The type of libc used on Linux systems ("gnu", "musl", or None if undetermined).
-    """
-    system = platform.system().lower()  # "linux", "windows", "darwin" (macOS)
-    machine = platform.machine().lower()  # "x86_64", "arm64", etc.
-
-    libc_type = None
-
-    if system == "linux":
-        # Check for GNU libc explicitly
-        try:
-            result = subprocess.run(["ldd", "--version"], capture_output=True, text=True)
-            if "GNU" in result.stdout:
-                libc_type = "gnu"
-        except FileNotFoundError:
-            pass  # ldd might not exist, continue checking for musl
-
-        # Check for musl if GNU was not detected
-        if libc_type is None:
-            try:
-                with open("/proc/self/maps", "rb") as f:
-                    if b"musl" in f.read():
-                        libc_type = "musl"
-            except FileNotFoundError:
-                pass  # Unable to determine libc
-
-    return {
-        "os": system,
-        "arch": machine,
-        "libc": libc_type
-    }
-
-
 def make_padded_probes(pangenomefa,probefasta,minlen,probeprefix=""):
     """
     Generates padded probes for sequences in the pangenome that are shorter than a specified length.
@@ -127,7 +87,7 @@ def make_padded_probes(pangenomefa,probefasta,minlen,probeprefix=""):
         SeqIO.write(toadd, fasta_file, "fasta")
     logger.info(f"Padding small sequences generated {len(toadd)} additional probes")
 
-def nucleotide_proportions(sequences):
+def nucleotide_proportions(sequences,propinit):
     """
     Calculates the nucleotide proportions in a list of sequences.
 
@@ -150,6 +110,9 @@ def nucleotide_proportions(sequences):
     counts = Counter(overallseq)  # Count occurrences of each nucleotide
     total = sum(counts.values())  # Total nucleotides
     proportions = {nt: count / total for nt, count in counts.items()}# Calculate proportions
+    for x in propinit:
+        if x not in proportions:
+            proportions[x] = 0.0
     return proportions
 
 def to_dict_remove_dups(sequences):
@@ -172,10 +135,13 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     outgenomes = []
     excluded = 0
     included = 0
-    overallprops = nucleotide_proportions(ingenomes)
+    allowed = ["N", "A", "C", "G", "T", "n", "a", "c", "g", "t"]
+    propinit = {x:0 for x in allowed}
+    overallprops = nucleotide_proportions(ingenomes,propinit)
     added = []
     for id,i in ingenomes.items():
-        props = nucleotide_proportions({id:i})
+        propinit = {x: 0 for x in allowed}
+        props = nucleotide_proportions({id:i},propinit)
         allowed = ["N","A","C","G","T","n","a","c","g","t"]
         nonallowed = [x for x in i.seq if x not in allowed]
         propnonstandard = sum([props[x] for x in props if x not in allowed])
@@ -188,10 +154,13 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
             excluded += 1
         elif float(propnonstandard) >= float(maxnonspandard) and i.id not in added:
             notallowedstr = ",".join(list(set(nonallowed)))
-            logger.info(f"genome {i.id} has non standard chraracters: {notallowedstr} and has been excluded")
+            logger.info(f"genome {i.id} has excess non-standard chraracters: {notallowedstr} and has been excluded")
             excluded += 1
         elif seqlen < 150:
             logger.info(f"genome {i.id} is too short ({seqlen}) and has been excluded")
+            excluded += 1
+        elif (props["C"]+props["c"]) < 0.01:
+            logger.info(f"genome {i.id} hsa no C (likely genetic signatures threebase) and has been excluded")
             excluded += 1
         else:
             outgenomes.append(i)
@@ -228,42 +197,42 @@ class RuntimeFormatter(logging.Formatter):
         record.runtime = f"{elapsed_time:.2f}s"  # Add runtime to the record
         return super().format(record)
 
-def get_pangraphex(osarch):
-    """
-    Determines the appropriate PanGraph executable based on the operating system and architecture.
+def select_pangraph_binary():
+    arch = platform.machine().lower()
+    system = platform.system().lower()
 
-    Args:
-        osarch (dict): Dictionary containing OS, architecture, and libc information.
-
-    Returns:
-        str: Path to the PanGraph executable.
-    """
-    if osarch["os"] == "linux":
-        if osarch["arch"] == "arm64":
-            if osarch["libc"] == "gnu":
-                return "pangraph-aarch64-linux-gnu"
-            elif osarch["libc"] == "musl":
-                return "pangraph-aarch64-linux-musl"
-            else:
-                logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
-        elif osarch["arch"] == "x86_64":
-            if osarch["libc"] == "gnu":
-                return "pangraph-x86_64-linux-gnu"
-            elif osarch["libc"] == "musl":
-                return "pangraph-x86_64-linux-musl"
-            else:
-                logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
-    elif osarch["os"] == "darwin":
-        if osarch["arch"] == "arm64":
-            return "pangraph-aarch64-darwin"
-        elif osarch["arch"] == "x86_64":
-            return "pangraph-x86_64-darwin"
-        else:
-            logger.error(f"Unsupported os/architecture combination {osarch["os"]}/{osarch['arch']}")
-    elif osarch["os"] == "windows":
-        return "pangraph-x86_64-pc-windows-gnu.exe"
+    # Normalize architecture
+    if arch in ["x86_64", "amd64"]:
+        arch = "x86_64"
+    elif arch in ["aarch64", "arm64"]:
+        arch = "aarch64"
     else:
-        logger.error(f"Unsupported os/architecture/lobc combination {osarch["os"]}/{osarch['arch']}/{osarch['libc']}")
+        logger.error(f"Unsupported architecture: {arch}")
+
+    # Select OS and libc variant
+    if system == "darwin":
+        os_tag = "darwin"
+    elif system == "linux":
+        # Try to detect musl vs gnu
+        try:
+            with open("/usr/bin/ldd", "rb") as f:
+                if b"musl" in f.read():
+                    os_tag = "linux-musl"
+                else:
+                    os_tag = "linux-gnu"
+        except:
+            os_tag = "linux-gnu"  # Default fallback
+    elif system == "windows":
+        os_tag = "windows-gnu.exe"
+    else:
+        logger.error(f"Unsupported OS: {system}")
+
+    binary_name = f"pangraph-{arch}-{os_tag}"
+
+    return binary_name
+
+# Example usage
+print("Selected binary:", select_pangraph_binary())
 
 
 def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
@@ -371,21 +340,20 @@ def run_pangraph(args,filtinput):
     outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for PanGraph files
     pangraph_log = open(outloc + "_pangraph.log", "w")  # Open a log file for PanGraph output
 
-    osarch = detect_os_arch()
-
     if args.pangraphstrict:
         adds= " -S"
     else:
         adds = ""
 
-    if args.maxdiv and osarch["os"] == "darwin":
+    if args.maxdiv and platform.system().lower() == "darwin":
+        logger.info("--maxdiv enables strict identity threshold for Pangraph (arm macOS version only) which is still in development. Beware this may not work as expected.")
         pangraphex = "pangraph-maxdiv-aarch64-darwin"
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
         cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
-    elif args.maxdiv and osarch["os"] != "darwin":
+    elif args.maxdiv and platform.system().lower() != "darwin":
         logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
     else:
-        pangraphex = get_pangraphex(osarch) # TODO may be issues when conda is installed as x86 but running on arm64
+        pangraphex = select_pangraph_binary() # TODO may be issues when conda is installed as x86 but running on arm64
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
         cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
@@ -812,7 +780,7 @@ def get_args():
     pangraphsettings = design.add_argument_group("Pangraph settings")
 
     pangraphsettings.add_argument("--pangraphident", type=int, default=20,choices=[5,10,20],help="Pangenome percentage identity setting allowable values are 5,10 or 20")
-    pangraphsettings.add_argument("--pangraphalpha", type=float, default=100,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
+    pangraphsettings.add_argument("--pangraphalpha", type=float, default=0,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
     pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
     pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
     pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
