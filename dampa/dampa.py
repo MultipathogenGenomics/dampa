@@ -13,10 +13,13 @@ from collections import Counter
 import platform
 import subprocess
 import glob
+import re
+import copy
 import importlib.resources
 # from tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
 from dampa.vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
 from dampa.tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
+from dampa.tools.cdhit_rep_noN import longest_or_fewest_ns_representatives
 from dampa import __version__ as dampaversion
 
 
@@ -25,7 +28,7 @@ def mmseqs_subset(args,filtinput):
     run the following commands
     mmseqs createdb ingenomes.fasta alltypesdb
 
-    mmseqs cluster alltypesdb $pref""DB tmp --min-seq-id mmident -c mmcov
+    mmseqs cluster alltypesdb $pref""DB tmp --min-seq-id clusterident -c clustercov
 
     mmseqs createtsv alltypesdb $pref""DB $pref""cluster.tsv
 
@@ -39,7 +42,7 @@ def mmseqs_subset(args,filtinput):
 
     cmd = f"mmseqs createdb {filtinput} {outloc}_alltypesdb"
     subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.mmident} -c {args.mmcov} --cov-mode 1"
+    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.clusterident} -c {args.clustercov} --cov-mode 1"
     subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
     # cmd = f"mmseqs createtsv {outloc}_alltypesdb {outloc}_DB {outloc}_cluster.tsv"
     # subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
@@ -59,6 +62,27 @@ def mmseqs_subset(args,filtinput):
 
 
     return mmseqsreps
+
+
+def cdhit_subset(args,filtinput):
+    outloc = f"{args.outputfolder}/{args.outputprefix}"
+    cdhit_log = open(outloc + "_cdhit.log", "w")
+
+    cmd = f"cd-hit-est -c {args.clusterident} -T {args.threads} -aS {args.clustercov} -i {filtinput} -o {outloc}_cdhit_reps"
+    subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
+    cdhitreps = f"{outloc}_cdhit_reps.fasta"
+    longest_or_fewest_ns_representatives(filtinput,f"{outloc}_cdhit_reps.clstr",cdhitreps)
+
+    if os.path.exists(cdhitreps):
+        logger.info(f"cdhit ran successfully")
+        if not args.keeplogs:
+            os.remove(outloc + "_cdhit.log")
+        return cdhitreps
+    else:
+        logger.error(f"cdhit output file {cdhitreps} not present. Check for error in capture log.")
+
+    return cdhitreps
+
 
 def make_padded_probes(pangenomefa,probefasta,minlen,probeprefix=""):
     """
@@ -121,7 +145,7 @@ def to_dict_remove_dups(sequences):
 def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     """
     Filters out genomes with a high proportion of non-standard nucleotides.
-
+    Also trims genomes for trailing As or Ns, and removes genomes with excess Ns or too short sequences.
     Args:
         genomes (str): Path to the input genomes FASTA file.
         outfolder (str): Path to the output folder.
@@ -156,16 +180,24 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
             notallowedstr = ",".join(list(set(nonallowed)))
             logger.info(f"genome {i.id} has excess non-standard chraracters: {notallowedstr} and has been excluded")
             excluded += 1
-        elif seqlen < 150:
+        elif seqlen < 100:
             logger.info(f"genome {i.id} is too short ({seqlen}) and has been excluded")
             excluded += 1
         elif (props["C"]+props["c"]) < 0.01:
             logger.info(f"genome {i.id} hsa no C (likely genetic signatures threebase) and has been excluded")
             excluded += 1
         else:
-            outgenomes.append(i)
-            added.append(i.id)
-            included += 1
+            oldi = copy.copy(i)
+            i = strip_polyA(i)
+            if str(i.seq) != str(oldi.seq):
+                trimmed = len(oldi.seq) - len(i.seq)
+                logger.info(f"{trimmed}bp have been trimmed from genome {i.id}")
+            if len(i.seq) < 100:
+                excluded += 1
+            else:
+                outgenomes.append(i)
+                added.append(i.id)
+                included += 1
 
 
     outpath = outfolder + "/" + genomes.split("/")[-1].replace(".fasta","").replace(".fa","").replace(".fna","")
@@ -521,6 +553,19 @@ def get_ambig_count(seq):
     ambig = len([x for x in seq if x not in ["A","T","G","C","a","t","c","g"]])
     return ambig
 
+
+def strip_polyA(s):
+    '''Strip poly-A/N/M tail, but only if tail is longer than 5 bases.'''
+    seq_str = str(s.seq)
+    match = re.match(r'(.*[^AaNnMm])([AaNnMm]+)$', seq_str)
+
+    if match:
+        core, tail = match.groups()
+        if len(tail) > 5:
+            s.seq = Seq.Seq(core)
+
+    return s
+
 def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_step,maxambig,probeprefix=""):
     """
     Splits a pangenome into probes of specified length and step size.
@@ -795,14 +840,16 @@ def get_args():
     probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
     probetoolssettings.add_argument("--nodust", help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",action='store_true')
 
-    mmseqssettings = design.add_argument_group("mmseqs settings")
-    mmseqssettings.add_argument("--mmseqs_inputno_trigger",
+    preclustersettings = design.add_argument_group("preclustering settings")
+    preclustersettings.add_argument("--clusterer", default="cdhit",
+                                    help="precluster using cdhitest or mmseqs2", choices=['cdhit','mmseqs'])
+    preclustersettings.add_argument("--clustering_inputno_trigger",
                                   help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9 percent identity",type=int,
                                   default=5000)
-    mmseqssettings.add_argument("--mmident", type=float, default=0.999,
+    preclustersettings.add_argument("--clusterident", type=float, default=0.999,
                                     help="Minimum identity to cluster genomes")
-    mmseqssettings.add_argument("--mmcov", type=float, default=1,
-                                    help="Minimum coverage of genomes over which mmident must apply (0-1)")
+    preclustersettings.add_argument("--clustercov", type=float, default=1,
+                                    help="Minimum coverage of genomes over which clusterident must apply (0-1)")
 
     additionalsettings = design.add_argument_group("Additional settings")
 
@@ -927,9 +974,16 @@ def main():
         args.input,overallprops,included = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
         originput = str(args.input)
         rminp = False
-        if included > args.mmseqs_inputno_trigger:
-            rminp = True
-            args.input = mmseqs_subset(args,args.input)
+        if included > args.clustering_inputno_trigger:
+            if args.clusterer == "mmseqs":
+                rminp = True
+                logger.info("Using mmseqs to cluster genomes")
+                args.input = mmseqs_subset(args,args.input)
+            elif args.clusterer == "cdhit":
+                rminp = True
+                logger.info("Using cdhit to cluster genomes")
+                args.input = cdhit_subset(args, args.input)
+
         run_pangraph(args,args.input)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
         probename = args.outputfolder + "/" + args.outputprefix + "_probes.fasta"
         pangenomefasta = f"{args.outputfolder}/{args.outputprefix}_pangenome_lin.fa"
