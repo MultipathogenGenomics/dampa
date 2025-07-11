@@ -4,7 +4,7 @@ import sys
 def longest_or_fewest_ns_representatives(fasta_file, clstr_file, output_file):
     # Load sequences
     seqs = SeqIO.to_dict(SeqIO.parse(fasta_file, "fasta"))
-
+    shorttolong = {x[:19]:x for x in seqs.keys()}
     # Parse .clstr file
     clusters = defaultdict(list)
     cluster_id = -1
@@ -20,7 +20,10 @@ def longest_or_fewest_ns_representatives(fasta_file, clstr_file, output_file):
     # Choose representative per cluster
     representatives = []
     for cluster, members in clusters.items():
-        seq_objs = [seqs[sid] for sid in members if sid in seqs]
+        seq_objs = [seqs[shorttolong[sid]] for sid in members if shorttolong[sid] in seqs]
+        if len(seq_objs) == 0:
+            print("no sequences in cluster", cluster, "skipping")
+            continue
 
         # Try to get N-free sequences
         nfree = [s for s in seq_objs if 'N' not in s.seq.upper()]

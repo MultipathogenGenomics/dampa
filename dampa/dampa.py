@@ -130,7 +130,7 @@ def nucleotide_proportions(sequences,propinit):
             logger.error(e)
             print(i)
             print(sequences)
-        overallseq += str(sequence.seq)
+        overallseq += str(sequence.seq).upper()
     counts = Counter(overallseq)  # Count occurrences of each nucleotide
     total = sum(counts.values())  # Total nucleotides
     proportions = {nt: count / total for nt, count in counts.items()}# Calculate proportions
@@ -734,7 +734,7 @@ def subambig(probes,props):
     rawprobes = SeqIO.parse(probes,"fasta")
     outprobes = []
     for probe in rawprobes:
-        pseq = str(probe.seq)
+        pseq = str(probe.seq).upper()
         outseq = ""
         for n in pseq:
             if n not in ['A','T','C','G']:
