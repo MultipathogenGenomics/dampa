@@ -65,24 +65,156 @@ def mmseqs_subset(args,filtinput):
 
 
 def cdhit_subset(args,filtinput):
+    inseqs = SeqIO.to_dict(SeqIO.parse(filtinput, "fasta"))
     outloc = f"{args.outputfolder}/{args.outputprefix}"
     cdhit_log = open(outloc + "_cdhit.log", "w")
 
-    cmd = f"cd-hit-est -c {args.clusterident} -T {args.threads} -aS {args.clustercov} -i {filtinput} -o {outloc}_cdhit_reps"
+    cmd = f"cd-hit-est -M 0 -c {args.clusterident} -T {args.threads} -aS {args.clustercov} -i {filtinput} -o {outloc}_cdhit_reps -d 0"
     subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
-    cdhitreps = f"{outloc}_cdhit_reps.fasta"
-    longest_or_fewest_ns_representatives(filtinput,f"{outloc}_cdhit_reps.clstr",cdhitreps)
+    cdhitrepsout = f"{outloc}_cdhit_reps.fasta"
+    clusters,cdhitreps = longest_or_fewest_ns_representatives(inseqs,f"{outloc}_cdhit_reps.clstr")
+    # Write results
+    with open(cdhitrepsout, "w") as out_f:
+        SeqIO.write(cdhitreps, out_f, "fasta")
 
-    if os.path.exists(cdhitreps):
+
+    if os.path.exists(cdhitrepsout):
         logger.info(f"cdhit ran successfully")
         if not args.keeplogs:
             os.remove(outloc + "_cdhit.log")
-        return cdhitreps
+        return cdhitrepsout
     else:
-        logger.error(f"cdhit output file {cdhitreps} not present. Check for error in capture log.")
+        logger.error(f"cdhit output file {cdhitrepsout} not present. Check for error in capture log.")
 
-    return cdhitreps
+    return cdhitrepsout
 
+
+def cdhit_2step_clust(args,filtinput,filtered):
+    """
+    Runs a two-step clustering process using CD-HIT to generate representative sequences.
+
+    Args:
+        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
+        filtinput (str): Path to the input filtered genomes file.
+
+    Returns:
+        str: Path to the output file containing representative sequences.
+    """
+    inseqs = SeqIO.to_dict(SeqIO.parse(filtinput, "fasta"))
+    outloc = f"{args.outputfolder}/{args.outputprefix}"
+    cdhit_log = open(outloc + "_cdhit.log", "w")
+    cdhithighreps = f"{outloc}_cdhit_reps_high"
+    cdhithighrepsout = f"{cdhithighreps}.fasta"
+    cmd = f"cd-hit-est -M 0 -c {args.clusterident} -T {args.threads} -aS {args.clustercov} -i {filtinput} -o {cdhithighreps} -d 0"
+    subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
+    highclusters,highcdhitreps = longest_or_fewest_ns_representatives(inseqs,f"{cdhithighreps}.clstr")
+    strain_to_highcluster = {strain: cluster for cluster, strains in highclusters.items() for strain in strains}
+    strain_to_highcluster_size = {strain: len(strains) for strains in highclusters.values() for strain in strains}
+    strain_to_highcluster_size
+    logger.info(f"High cutoff clustering complete. {len(highcdhitreps)} representative sequences generated.")
+
+    cdhitlowreps = f"{outloc}_cdhit_reps_low"
+    cdhitlowrepsout = f"{cdhitlowreps}.fasta"
+    cmd = f"cd-hit-est -M 0 -c {args.lowclusterident} -T {args.threads} -aS {args.clustercov} -i {cdhithighreps} -o {cdhitlowreps} -d 0"
+    subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
+    lowclusters,lowcdhitreps = longest_or_fewest_ns_representatives(inseqs, f"{cdhitlowreps}.clstr")
+
+    logger.info(f"Low cutoff clustering complete. {len(lowcdhitreps)} representative sequences generated.")
+
+    regular,outliers = split_to_reg_or_outliers(lowclusters, strain_to_highcluster_size,highcdhitreps,inseqs,outlier_size_limit=args.outliersizelimit)
+
+    for outlier in outliers:
+        seqlen = len(outlier.seq)
+        newrow = {"genome id": outlier.id, "genome description": outlier.description, "filter reason": "outlier singleton genomes", "Genome length": seqlen,
+                  "nonstandard proportion": ""}
+        new_df = pd.DataFrame([newrow])
+        filtered = pd.concat([filtered, new_df], ignore_index=True)
+
+    if len(regular) > 1:
+        regstrains = f"{outloc}_cdhit_reg.fasta"
+        SeqIO.write(regular, regstrains, "fasta")
+    elif len(regular) == 1:
+        regstrains = f"{outloc}_cdhit_reg.fasta"
+        dupe = copy.copy(regular[0])
+        dupe.id = dupe.id+"_dupe"
+        regular = [regular[0],dupe]
+        SeqIO.write(regular, regstrains, "fasta")
+    else:
+        logger.error(f"\n#########\nNo regular strains found in high cutoff clusters.\n#########\n")
+        sys.exit()
+    if len(outliers) > 1:
+        outliersstrains = f"{outloc}_cdhit_outlier.fasta"
+        SeqIO.write(outliers, outliersstrains, "fasta")
+    elif len(outliers) == 1:
+        outliersstrains = f"{outloc}_cdhit_outlier.fasta"
+        dupe = copy.copy(outliers[0])
+        dupe.id = dupe.id+"_dupe"
+        outliers = [outliers[0],dupe]
+        SeqIO.write(outliers, outliersstrains, "fasta")
+    else:
+        logger.info(f"No outlier strains found in high cutoff clusters. No outlier fasta file or probes will be generated.")
+        outliersstrains = False
+
+
+    # TODO for singleton lowclusters check if also singletons in high clusters - if so add to alternate rep fasta file
+    # use alternate rep fasta file to generate probes in separate dampa run
+
+    cdhit_log.close()
+
+    if os.path.exists(regstrains):
+        logger.info(f"cdhit ran successfully")
+        if not args.keeplogs:
+            os.remove(outloc + "_cdhit.log")
+        return regstrains,outliersstrains,filtered
+    else:
+        logger.error(f"cdhit output file {regstrains} not present. Check for error in capture log.")
+
+def split_to_reg_or_outliers(lowclusters, strain_to_highcluster_size,highcdhitreps,inseqs,outlier_size_limit):
+    altstrains = []
+    regstrains = []
+    altclustscount = 0
+    for cluster in lowclusters:
+        lowclustersize = len(lowclusters[cluster])
+        if lowclustersize <= outlier_size_limit:
+            # if only x sequence in low cluster, check if also x seq in high cluster
+            strain = lowclusters[cluster][0]
+            highclustersize = strain_to_highcluster_size[strain]
+            # print(strain,highclustersize)
+            if highclustersize == lowclustersize:
+                # print(f"low cluster {cluster} with {lowclustersize} sequences is also a high cluster with {highclustersize} sequences. This is an outlier cluster.")
+                altclustscount += 1
+                for i in lowclusters[cluster]:
+                    altstrains.append(inseqs[i])
+                    # print(inseqs[i])
+
+    regstraintotal = 0
+    altstrainids = [altstrain.id for altstrain in altstrains]
+    for strain in highcdhitreps:
+        if strain.id not in altstrainids:
+            regstrains.append(strain)
+            if strain.id not in strain_to_highcluster_size:
+                logger.error(f"strain {strain.id} not found in strain_to_highcluster_size dictionary. This should not happen.")
+                for strain2 in strain_to_highcluster_size:
+                    print(strain2,strain_to_highcluster_size[strain2])
+            regstraintotal += strain_to_highcluster_size[strain.id]
+
+    prop_alt_clust= float(altclustscount) / float(len(highcdhitreps))
+    prop_alt_strains = float(len(altstrains)) / float(len(inseqs.keys()))
+    if prop_alt_strains == 1.0:
+        logger.info(f"All strains are in low cutoff clusters. No outliers will be generated.")
+        regstrains = copy.deepcopy(altstrains)
+        altstrains = []
+    elif prop_alt_clust*100 >= 0.1:
+        logger.info(f"Over 10% of high cutoff clusters ({prop_alt_clust*100:.2f}%) are also singletons at low cutoff. Outliers will not be generated.")
+        regstrains = copy.deepcopy(highcdhitreps)
+        altstrains = []
+    if altclustscount > 0:
+        logger.warning(f"{prop_alt_clust*100:.2f}% ({altclustscount}/{len(highcdhitreps)}) of high cutoff clusters are also outliers at low cutoff.\n"
+                    f"{prop_alt_strains*100:.2f}% ({len(altstrains)}/{len(inseqs.keys())}) of all strains are in these clusters.\n"
+                    f"These may be incorrect species or artificially modified genomes (i.e codon optimised).\n"
+                    f"Please check excluded strain file: _filtered_genomes.tsv for details.\n"
+                    f"These strains will be used to separately generate probes with the _outliers marker.")
+    return regstrains,altstrains
 
 def make_padded_probes(pangenomefa,probefasta,minlen,probeprefix=""):
     """
@@ -801,6 +933,57 @@ def cleanup(args,filtgenomes=""):
                 os.remove(i)
     logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
+def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
+    probename = outloc + "_probes.fasta"
+    pangenomefasta = outloc + "_pangenome_lin.fa"
+    run_pangraph(args,
+                 filtered_input,outloc)  # TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
+
+
+    split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig, probeprefix)
+
+    if not args.skip_padding:
+        make_padded_probes(pangenomefasta, probename, args.minlenforpadding, probeprefix=probeprefix)
+    if not args.skip_probetoolsfinal:
+        finalcaptureout, totalprobes = run_finalprobetools(args, probename, filtered_input,outloc)
+        if not args.skipsubambig:
+            subambig(probename, overallprops)
+        if not args.skip_summaries:
+            make_summaries(args, finalcaptureout, totalprobes,outloc)
+    else:
+        totalprobes = get_probeno(probename)
+        if not args.skipsubambig:
+            subambig(probename, overallprops)
+        if not args.skip_summaries:
+            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input)
+            make_summaries(args, finalcaptureout, totalprobes,outloc)
+    if rminp:
+        cleanup(args, filtered_input)
+    else:
+        cleanup(args)
+
+    return totalprobes
+
+def write_filtered_genomes(filtered, outloc,descriptions):
+    """
+    Writes filtered genomes to a file.
+
+    Args:
+        filtered (pandas.DataFrame): DataFrame containing filtered genome information.
+        outloc (str): Output location for the filtered genomes file.
+
+    Returns:
+        str: Path to the written filtered genomes file.
+    """
+    outpath = f"{outloc}_filtered_genomes.tsv"
+
+    # filtered["genome description"] = descriptions
+    filtered["genome description"] = filtered["genome id"].map(descriptions)
+
+    filtered.to_csv(outpath, sep="\t", index=False)
+    # logger.info(f"Filtered genomes written to {outpath}")
+    return outpath
+
 def get_args():
     def File(MyFile):
         if not os.path.isfile(MyFile):
@@ -882,8 +1065,15 @@ def get_args():
                                   default=5000)
     preclustersettings.add_argument("--clusterident", type=float, default=0.999,
                                     help="Minimum identity to cluster genomes")
+    preclustersettings.add_argument("--lowclusterident", type=float, default=0.85,
+                                    help="Minimum identity to cluster genomes at low threshold (used in cluster2step)")
     preclustersettings.add_argument("--clustercov", type=float, default=1,
                                     help="Minimum coverage of genomes over which clusterident must apply (0-1)")
+    preclustersettings.add_argument("--cluster2step",action='store_true',
+                                    help="perform initial high threshold clustering followed by low threshold clustering of representatives, remove low level clusters composed of one high level cluster with <= outliersizelimit members")
+    preclustersettings.add_argument("--outliersizelimit",
+                                    help="In two step clustering if a cluster is <=outliersizelimit at both high and low identity then it is treated as an outlier",type=int,
+                                    default=1)
 
     additionalsettings = design.add_argument_group("Additional settings")
 
@@ -1008,19 +1198,32 @@ def main():
         args.input,overallprops,included = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
         originput = str(args.input)
         rminp = False
-        if included > args.clustering_inputno_trigger:
-            if args.clusterer == "mmseqs":
-                rminp = True
-                logger.info("Using mmseqs to cluster genomes")
-                args.input = mmseqs_subset(args,args.input)
-            elif args.clusterer == "cdhit":
-                rminp = True
-                logger.info("Using cdhit to cluster genomes")
-                args.input = cdhit_subset(args, args.input)
+        if args.cluster2step:
+            rminp = True
+            logger.info("Using cdhit to cluster genomes in two stages")
+            regstrains,outliersstrains,filtered = cdhit_2step_clust(args, filtered_input,filtered)
+            logger.info("2 stage clustering finished")
 
-        run_pangraph(args,args.input)#TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
-        probename = args.outputfolder + "/" + args.outputprefix + "_probes.fasta"
-        pangenomefasta = f"{args.outputfolder}/{args.outputprefix}_pangenome_lin.fa"
+            regprobes = design_probes(args, regstrains, probeprefix, overallprops,rminp,outloc)
+            logger.info("regular probes designed")
+            altprobes = 0
+            if outliersstrains != False:
+                outloc2 = f"{args.outputfolder}/{args.outputprefix}_outliers"
+                altprobes = design_probes(args, outliersstrains, probeprefix, overallprops,rminp,outloc2)
+                logger.info("outlier probes designed")
+            logger.info(f"dampa design finished. Regular probes: {regprobes}. Outliers probes: {altprobes}")
+        else:
+            if included > args.clustering_inputno_trigger:
+                if args.clusterer == "mmseqs":
+                    rminp = True
+                    logger.info("Using mmseqs to cluster genomes")
+                    filtered_input = mmseqs_subset(args,filtered_input)
+                elif args.clusterer == "cdhit":
+                    rminp = True
+                    logger.info("Using cdhit to cluster genomes")
+                    filtered_input = cdhit_subset(args, filtered_input)
+
+            totalprobes = design_probes(args, filtered_input, probeprefix, overallprops,rminp,outloc)
 
         split_pangenome_into_probes(pangenomefasta, probename,args.probelen, args.probestep,args.maxambig,probeprefix)
 
