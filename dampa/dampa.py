@@ -295,6 +295,8 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
     propinit = {x:0 for x in allowed}
     overallprops = nucleotide_proportions(ingenomes,propinit)
     added = []
+    descriptions = {}
+    notrimmed = 0
     for id,i in ingenomes.items():
         propinit = {x: 0 for x in allowed}
         props = nucleotide_proportions({id:i},propinit)
@@ -303,40 +305,60 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
         propnonstandard = sum([props[x] for x in props if x not in allowed])
         propn = sum([props[x] for x in props if x in ["n","N"]])
         i.id = i.id.split(" ")[0]
+        descriptions[i.id] = str(i.description)
         i.description = ""
         seqlen = len(i.seq)
         if propn > 0.05:
             logger.info(f"genome {i.id} has excess N and has been excluded")
             excluded += 1
+            newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "excess N", "Genome length": seqlen,"nonstandard proportion":propn}
+            new_df = pd.DataFrame([newrow])
+            filtered = pd.concat([filtered, new_df], ignore_index=True)
         elif float(propnonstandard) >= float(maxnonspandard) and i.id not in added:
-            notallowedstr = ",".join(list(set(nonallowed)))
-            logger.info(f"genome {i.id} has excess non-standard chraracters: {notallowedstr} and has been excluded")
             excluded += 1
+            newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "excess non-standard", "Genome length": seqlen,"nonstandard proportion":propnonstandard}
+            new_df = pd.DataFrame([newrow])
+            filtered = pd.concat([filtered, new_df], ignore_index=True)
         elif seqlen < 100:
-            logger.info(f"genome {i.id} is too short ({seqlen}) and has been excluded")
             excluded += 1
+            newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "too short (<100bp)", "Genome length": seqlen,"nonstandard proportion":""}
+            new_df = pd.DataFrame([newrow])
+            filtered = pd.concat([filtered, new_df], ignore_index=True)
         elif (props["C"]+props["c"]) < 0.01:
-            logger.info(f"genome {i.id} hsa no C (likely genetic signatures threebase) and has been excluded")
             excluded += 1
+            newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "very low C content, probable 3base genome from genetic signatures", "Genome length": seqlen,"nonstandard proportion":""}
+            new_df = pd.DataFrame([newrow])
+            filtered = pd.concat([filtered, new_df], ignore_index=True)
         else:
             oldi = copy.copy(i)
             i = strip_polyA(i)
             if str(i.seq) != str(oldi.seq):
                 trimmed = len(oldi.seq) - len(i.seq)
-                logger.info(f"{trimmed}bp have been trimmed from genome {i.id}")
+                # logger.info(f"{trimmed}bp have been trimmed from genome {i.id}")
+                newrow = {"genome id": i.id, "genome description": i.description,
+                          "filter reason": "trimmed polyA (not removed)",
+                          "Genome length": seqlen, "nonstandard proportion / metric": trimmed}
+                new_df = pd.DataFrame([newrow])
+                filtered = pd.concat([filtered, new_df], ignore_index=True)
+                notrimmed +=1
             if len(i.seq) < 100:
                 excluded += 1
+                newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "too short (<100bp)",
+                          "Genome length": seqlen, "nonstandard proportion": ""}
+                new_df = pd.DataFrame([newrow])
+                filtered = pd.concat([filtered, new_df], ignore_index=True)
+                notrimmed -= 1
             else:
                 outgenomes.append(i)
                 added.append(i.id)
                 included += 1
 
-
-    outpath = outfolder + "/" + genomes.split("/")[-1].replace(".fasta","").replace(".fa","").replace(".fna","")
-    outpath = outpath + "_filt.fasta"
+    outpath = outloc+"_filtered_input.fasta"
     SeqIO.write(outgenomes, outpath, "fasta")
+    logger.info(f"total genomes with trailing polyA >5bp trimmed: {notrimmed}")
     logger.info(f"total genomes excluded for due to excess non ATGCN nucleotides: {excluded}")
-    return outpath,overallprops,included
+    logger.info(f"See *_filtered_genomes.tsv file for details")
+    return outpath,overallprops,included,filtered,descriptions
 
 class RuntimeFormatter(logging.Formatter):
     """
@@ -1195,8 +1217,9 @@ def main():
 
         logger.info("Filter genomes with too many non standard nucleotides")
 
-        args.input,overallprops,included = filter_for_nonstandard_inputs(args.input, args.outputfolder,args.maxnonspandard)
-        originput = str(args.input)
+        filtered = pd.DataFrame(columns=["genome id","genome description","filter reason","Genome length","nonstandard proportion"])
+
+        filtered_input,overallprops,included,filtered,descriptions = filter_for_nonstandard_inputs(args.input, outloc,args.maxnonspandard,filtered)
         rminp = False
         if args.cluster2step:
             rminp = True
@@ -1225,28 +1248,9 @@ def main():
 
             totalprobes = design_probes(args, filtered_input, probeprefix, overallprops,rminp,outloc)
 
-        split_pangenome_into_probes(pangenomefasta, probename,args.probelen, args.probestep,args.maxambig,probeprefix)
+            logger.info(f"dampa design finished. Total probes: {totalprobes}")
 
-        if not args.skip_padding:
-            make_padded_probes(pangenomefasta, probename,args.minlenforpadding,probeprefix=probeprefix)
-        if not args.skip_probetoolsfinal:
-            finalcaptureout,totalprobes = run_finalprobetools(args,probename,originput)
-            if not args.skipsubambig:
-                subambig(probename,overallprops)
-            if not args.skip_summaries:
-                make_summaries(args, finalcaptureout,totalprobes)
-        else:
-            totalprobes = get_probeno(probename)
-            if not args.skipsubambig:
-                subambig(probename,overallprops)
-            if not args.skip_summaries:
-                finalcaptureout = runprobetoolscapture(args,probename)
-                make_summaries(args, finalcaptureout,totalprobes)
-        if rminp:
-            cleanup(args,args.input)
-        else:
-            cleanup(args)
-        logger.info(f"dampa design finished. Total probes: {totalprobes}")
+        write_filtered_genomes(filtered, outloc,descriptions)
     elif args.command == "eval":
         if args.version:
             print(f"version {dampaversion}")
