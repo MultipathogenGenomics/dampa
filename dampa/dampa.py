@@ -396,6 +396,10 @@ def run_pangraph(args,filtinput,outloc):
         adds= " -S"
     else:
         adds = ""
+    if args.pangraphmmseqs:
+        addmmseqs = " -k mmseqs"
+    else:
+        addmmseqs = ""
 
     if args.maxdiv and platform.system().lower() == "darwin":
         logger.info("--maxdiv enables strict identity threshold for Pangraph (arm macOS version only) which is still in development. Beware this may not work as expected.")
@@ -855,6 +859,10 @@ def get_args():
     pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
     pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
     pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
+    pangraphsettings.add_argument("--pangraphmmseqs", action='store_true',
+                                    help="use mmseqs2 (slower but better at low identity) in pangraph instead of minimap")
+    pangraphsettings.add_argument("--pangraphdepth", type=int, default=0,help="Minimum depth of a node to allow in pangenome graph. Nodes with depth below this will be removed from the graph. Set to 0 to not remove any nodes based on depth")
+
 
     probetoolssettings = design.add_argument_group("Probetools settings")
 
