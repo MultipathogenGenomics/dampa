@@ -357,7 +357,27 @@ def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
     SeqIO.write(unmerged_records + merged_records, output_file, "fasta")
     return output_file
 
-def run_pangraph(args,filtinput):
+def remove_belowdepth_nodes(gfa_file, depthcut):
+
+    # Parse the GFA file
+    with open(gfa_file) as f:
+        lines = f.readlines()
+
+    # Identify nodes with depth below the threshold
+    nodes_to_remove = set()
+    for line in lines:
+        if line.startswith("S"):
+            parts = line.strip().split("\t")
+            node_id = parts[1]
+            totlen= float(parts[3].split(":")[-1])
+            len = float(parts[4].split(":")[-1])
+            depth = totlen / len
+            if depth <= depthcut:
+                nodes_to_remove.add(node_id)
+    return list(nodes_to_remove)
+
+
+def run_pangraph(args,filtinput,outloc):
     """
     Runs the PanGraph tool to generate a pangenome graph and associated files.
 
@@ -394,7 +414,13 @@ def run_pangraph(args,filtinput):
         if not args.keeplogs:
             os.remove(outloc + "_pangraph.log")
         # TODO improve linear merge (appears to be missing some possible merges)
-        linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",f"{outloc}_pangenome_lin.fa")# Remove the log file if not keeping logs
+        if args.pangraphdepth > 0:
+            lowdepthnodes = remove_belowdepth_nodes(f"{outloc}_pangenome.gfa", args.pangraphdepth)  # Remove nodes below a certain depth
+        else:
+            lowdepthnodes = []
+        linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",f"{outloc}_pangenome_lin.fa",lowdepthnodes)# Remove the log file if not keeping logs
+        # terminal_node_additional_clustering()
+
         logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
