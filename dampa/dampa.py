@@ -1,6 +1,7 @@
 import random
 import shutil
 from pathlib import Path
+import pandas as pd
 from Bio import SeqIO,SeqRecord,Seq
 from collections import defaultdict
 import subprocess
@@ -667,7 +668,7 @@ def get_clusters(args):
             clusterdict[strain] = cluster
     return clusterdict
 
-def load_capture_data(capture_path):
+def load_capture_data(capture_path,probetools0covnmin):
     """
     Loads capture data from a file.
 
@@ -694,7 +695,7 @@ def load_capture_data(capture_path):
                 depths[-1] += line.strip()
     seqs = [seq.lstrip('$') for seq in seqs]
     depths = [[int(d) for d in depth.lstrip('#').split(',')] for depth in depths]
-    depths = [replace_short_zeros(x, 10) for x in depths]
+    depths = [replace_short_zeros(x, probetools0covnmin) for x in depths]
     if len(set(len(c) for c in [headers, seqs, depths])) != 1:
         logger.error(f'The number of headers, seqs, and probe depth lists do not match in {capture_path}.')
         exit(1)
@@ -837,7 +838,7 @@ def make_summaries(args,ptcountfile,totalprobes):
     meancovs = []
     propcovs = []
     maxcheck = int(args.maxdepth_describe)
-    ptdata = load_capture_data(ptcountfile)
+    ptdata = load_capture_data(ptcountfile,args.probetools0covnmin)
     for name, data in ptdata.items():
         stats = process_count_pt(data, maxcheck)
         propcovs.append(stats[0])
