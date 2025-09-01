@@ -430,8 +430,7 @@ def select_pangraph_binary():
 
 
 
-
-def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
+def linear_transitive_chain_merge_fasta(inp, fasta_file, outp,lowdepthnodes):
     """
     Merge sequences in a GFA file based on linear transitive chains.
 
@@ -459,9 +458,10 @@ def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
         if line.startswith("L"):
             parts = line.strip().split("\t")
             a, a_orient, b, b_orient = parts[1], parts[2], parts[3], parts[4]
-            out_edges[(a, a_orient)].append((b, b_orient))
-            in_edges[(b, b_orient)].append((a, a_orient))
-            links_raw.append(parts)
+            if a not in lowdepthnodes and b not in lowdepthnodes:
+                out_edges[(a, a_orient)].append((b, b_orient))
+                in_edges[(b, b_orient)].append((a, a_orient))
+                links_raw.append(parts)
 
     # === Step 2: Build forward-only merge chains A + → B + where no other edges touch A+ or B+
     visited = set()
@@ -516,9 +516,17 @@ def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
     # Add unmerged records
     unmerged_records = [rec for name, rec in records.items() if name not in used_nodes]
 
+    # Filter out low depth nodes
+    unmerged_records = [rec for rec in unmerged_records if rec.id not in lowdepthnodes]
+
+    outnodes = unmerged_records + merged_records
+
+    # sizefiltnodes = [rec for rec in outnodes if len(rec.seq) >= 120]  #TODO Filter out sequences shorter than 120bp but this may be problematic for some graphs
+
+
     # Write output
     output_file = outp
-    SeqIO.write(unmerged_records + merged_records, output_file, "fasta")
+    SeqIO.write(outnodes, output_file, "fasta")
     return output_file
 
 def remove_belowdepth_nodes(gfa_file, depthcut):
@@ -1174,6 +1182,8 @@ def get_args():
     probetooleval.add_argument("--probetoolsidentity", type=int, default=85,
                                     help="Minimum identity in probe match to target to call probe binding")
     probetooleval.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
+    probetooleval.add_argument("--probetools0covnmin", type=int, default=20,
+                                    help="Minimum length (bp) of 0 coverage region in input genomes to trigger design of additional probes")
     probetooleval.add_argument("--nodust",
                                     help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",
                                     action='store_true')
