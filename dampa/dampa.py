@@ -561,8 +561,7 @@ def run_pangraph(args,filtinput,outloc):
         None
     """
     logger.info("Starting pangenome generation with PanGraph")
-    topdir = os.path.dirname(os.path.abspath(__file__))  # Get the directory of the current script
-    outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for PanGraph files
+      # Define the output location for PanGraph files
     pangraph_log = open(outloc + "_pangraph.log", "w")  # Open a log file for PanGraph output
 
     if args.pangraphstrict:
@@ -578,13 +577,13 @@ def run_pangraph(args,filtinput,outloc):
         logger.info("--maxdiv enables strict identity threshold for Pangraph (arm macOS version only) which is still in development. Beware this may not work as expected.")
         pangraphex = "pangraph-maxdiv-aarch64-darwin"
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds}{addmmseqs} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     elif args.maxdiv and platform.system().lower() != "darwin":
         logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
     else:
         pangraphex = select_pangraph_binary() # TODO may be issues when conda is installed as x86 but running on arm64
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{addmmseqs} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
@@ -603,7 +602,7 @@ def run_pangraph(args,filtinput,outloc):
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
     return
 
-def run_finalprobetools(args, inprobes,originput):
+def run_finalprobetools(args, inprobes,originput,outloc):
     """
     Runs the final probe design step using the Probetools tool.
 
@@ -614,7 +613,6 @@ def run_finalprobetools(args, inprobes,originput):
     Returns:
         tuple: A tuple containing the path to the final capture file and the total number of probes generated.
     """
-    outloc = f"{args.outputfolder}/{args.outputprefix}"  # Define the output location for Probetools files
     finalpref = f"{outloc}_probetools_final"  # Define the prefix for final Probetools output files
     finalprobes = f"{finalpref}_probes.fa"  # Define the path for the final probes file
     probetools_log = open(outloc + "_probetools.log", "w")  # Open a log file for Probetools output
@@ -711,7 +709,7 @@ def load_capture_data(capture_path,probetools0covnmin):
     # print(f' Total targets loaded: {"{:,}".format(len(capture_data))}')
     return capture_data
 
-def runprobetoolscapture(args,probes):
+def runprobetoolscapture(args,probes,outloc):
     """
     Runs the Probetools capture step.
 
@@ -722,7 +720,6 @@ def runprobetoolscapture(args,probes):
     Returns:
         str: Path to the capture output file.
     """
-    outloc = args.outputfolder+"/"+args.outputprefix
     current_directory = os.path.dirname(os.path.abspath(__file__))
     capture_log = open(outloc + "_capture.log", "w")
     with open(os.devnull, 'w') as devnull:
@@ -734,7 +731,7 @@ def runprobetoolscapture(args,probes):
         # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
         cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {args.input}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
-    outf = f"{args.outputfolder}/{args.outputprefix}_capture.pt"
+    outf = f"{outloc}_capture.pt"
     if os.path.exists(outf):
         logger.info(f"Probetools capture ran successfully")
         if not args.keeplogs:
@@ -817,7 +814,7 @@ def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_st
     SeqIO.write(outprobes, output_fasta, "fasta")
     logger.info(f"Extracted {totalprobes} probes from pangenome")
 
-def make_summaries(args,ptcountfile,totalprobes):
+def make_summaries(args,ptcountfile,totalprobes,outloc):
     """
     Generates summary statistics and plots for probe coverage.
 
@@ -829,7 +826,6 @@ def make_summaries(args,ptcountfile,totalprobes):
     Returns:
         None
     """
-    outloc = f"{args.outputfolder}/{args.outputprefix}"
     clusterdict = {}
     if args.clusterassign:
         clusterdict = get_clusters(args)
