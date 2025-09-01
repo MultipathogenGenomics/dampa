@@ -34,7 +34,7 @@ def replace_short_zeros(lst,threshold):
             start = i
             while i < n and lst[i] == 0:
                 i += 1
-            if i - start < threshold:  # If the sequence of 0s is shorter than threshold
+            if i - start <= threshold:  # If the sequence of 0s is shorter than threshold
                 for j in range(start, i):
                     lst[j] = 1
         else:
@@ -57,9 +57,9 @@ def filt_lens(capdata, headers=False):
     medlen = median(lens)
     medtop = medlen + (medlen*0.1)
     medbottom = medlen - (medlen*0.1)
-
-    filtlensd = {x:capdata[x] for x in capdata if len(capdata[x][1]) < medtop and len(capdata[x][1]) > medbottom}
-
+    filtlensd = {x:capdata[x] for x in capdata if len(capdata[x][1]) <= medtop and len(capdata[x][1]) >= medbottom}
+    if len(filtlensd) == 0:
+        filtlensd = capdata
     percpos = []
     filtlens = []
     hfilt = []
