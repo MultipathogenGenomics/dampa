@@ -90,7 +90,7 @@ def cdhit_subset(args,filtinput):
     return cdhitrepsout
 
 
-def cdhit_2step_clust(args,filtinput,filtered):
+def remove_outliers(args,filtinput,filtered):
     """
     Runs a two-step clustering process using CD-HIT to generate representative sequences.
 
@@ -105,18 +105,16 @@ def cdhit_2step_clust(args,filtinput,filtered):
     outloc = f"{args.outputfolder}/{args.outputprefix}"
     cdhit_log = open(outloc + "_cdhit.log", "w")
     cdhithighreps = f"{outloc}_cdhit_reps_high"
-    cdhithighrepsout = f"{cdhithighreps}.fasta"
-    cmd = f"cd-hit-est -M 0 -c {args.clusterident} -T {args.threads} -aS {args.clustercov} -i {filtinput} -o {cdhithighreps} -d 0"
+
+    cmd = f"cd-hit-est -M 0 -c {args.clusterident} -T {args.threads} -aS {args.outlierclustercov} -i {filtinput} -o {cdhithighreps} -d 0"
     subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
     highclusters,highcdhitreps = longest_or_fewest_ns_representatives(inseqs,f"{cdhithighreps}.clstr")
-    strain_to_highcluster = {strain: cluster for cluster, strains in highclusters.items() for strain in strains}
     strain_to_highcluster_size = {strain: len(strains) for strains in highclusters.values() for strain in strains}
-    strain_to_highcluster_size
     logger.info(f"High cutoff clustering complete. {len(highcdhitreps)} representative sequences generated.")
 
     cdhitlowreps = f"{outloc}_cdhit_reps_low"
-    cdhitlowrepsout = f"{cdhitlowreps}.fasta"
-    cmd = f"cd-hit-est -M 0 -c {args.lowclusterident} -T {args.threads} -aS {args.clustercov} -i {cdhithighreps} -o {cdhitlowreps} -d 0"
+
+    cmd = f"cd-hit-est -M 0 -c {args.outlierclusterident} -T {args.threads} -aS {args.outlierclustercov} -i {cdhithighreps} -o {cdhitlowreps} -d 0"
     subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
     lowclusters,lowcdhitreps = longest_or_fewest_ns_representatives(inseqs, f"{cdhitlowreps}.clstr")
 
@@ -132,14 +130,12 @@ def cdhit_2step_clust(args,filtinput,filtered):
         filtered = pd.concat([filtered, new_df], ignore_index=True)
 
     if len(regular) > 1:
-        regstrains = f"{outloc}_cdhit_reg.fasta"
-        SeqIO.write(regular, regstrains, "fasta")
+        SeqIO.write(regular, filtinput, "fasta")
     elif len(regular) == 1:
-        regstrains = f"{outloc}_cdhit_reg.fasta"
         dupe = copy.copy(regular[0])
         dupe.id = dupe.id+"_dupe"
         regular = [regular[0],dupe]
-        SeqIO.write(regular, regstrains, "fasta")
+        SeqIO.write(regular, filtinput, "fasta")
     else:
         logger.error(f"\n#########\nNo regular strains found in high cutoff clusters.\n#########\n")
         sys.exit()
@@ -156,19 +152,15 @@ def cdhit_2step_clust(args,filtinput,filtered):
         logger.info(f"No outlier strains found in high cutoff clusters. No outlier fasta file or probes will be generated.")
         outliersstrains = False
 
-
-    # TODO for singleton lowclusters check if also singletons in high clusters - if so add to alternate rep fasta file
-    # use alternate rep fasta file to generate probes in separate dampa run
-
     cdhit_log.close()
 
-    if os.path.exists(regstrains):
+    if os.path.exists(f"{cdhitlowreps}.clstr"):
         logger.info(f"cdhit ran successfully")
         if not args.keeplogs:
             os.remove(outloc + "_cdhit.log")
-        return regstrains,outliersstrains,filtered
+        return outliersstrains,filtered
     else:
-        logger.error(f"cdhit output file {regstrains} not present. Check for error in capture log.")
+        logger.error(f"cdhit output file {cdhitlowreps}.clstr not present. Check for error in capture log.")
 
 def split_to_reg_or_outliers(lowclusters, strain_to_highcluster_size,highcdhitreps,inseqs,outlier_size_limit):
     altstrains = []
@@ -568,22 +560,19 @@ def run_pangraph(args,filtinput,outloc):
         adds= " -S"
     else:
         adds = ""
-    if args.pangraphmmseqs:
-        addmmseqs = " -k mmseqs"
-    else:
-        addmmseqs = ""
+
 
     if args.maxdiv and platform.system().lower() == "darwin":
         logger.info("--maxdiv enables strict identity threshold for Pangraph (arm macOS version only) which is still in development. Beware this may not work as expected.")
         pangraphex = "pangraph-maxdiv-aarch64-darwin"
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds}{addmmseqs} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     elif args.maxdiv and platform.system().lower() != "darwin":
         logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
     else:
         pangraphex = select_pangraph_binary() # TODO may be issues when conda is installed as x86 but running on arm64
         pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{addmmseqs} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
@@ -1072,19 +1061,17 @@ def get_args():
 
 
 
-    pangraphsettings = design.add_argument_group("Pangraph settings")
+    pangraphsettings = design.add_argument_group("Pangraph settings","These settings control the pangenome graph generation step")
 
     pangraphsettings.add_argument("--pangraphident", type=int, default=20,choices=[5,10,20],help="Pangenome percentage identity setting allowable values are 5,10 or 20")
     pangraphsettings.add_argument("--pangraphalpha", type=float, default=0,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
     pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
     pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
     pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
-    pangraphsettings.add_argument("--pangraphmmseqs", action='store_true',
-                                    help="use mmseqs2 (slower but better at low identity) in pangraph instead of minimap")
     pangraphsettings.add_argument("--pangraphdepth", type=int, default=0,help="Minimum depth of a node to allow in pangenome graph. Nodes with depth below this will be removed from the graph. Set to 0 to not remove any nodes based on depth")
 
 
-    probetoolssettings = design.add_argument_group("Probetools settings")
+    probetoolssettings = design.add_argument_group("Probetools settings","Used to retrieve sequences that may be missed in the graph based design step")
 
     probetoolssettings.add_argument("--probetoolsidentity", type=int, default=85,
                                     help="Minimum identity in probe match to target to call probe binding")
@@ -1094,23 +1081,28 @@ def get_args():
     probetoolssettings.add_argument("--maxambig",help="The maximum number of ambiguous bases allowed in a probe",type=int,default=10)
     probetoolssettings.add_argument("--nodust", help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",action='store_true')
 
-    preclustersettings = design.add_argument_group("preclustering settings")
-    preclustersettings.add_argument("--clusterer", default="cdhit",
-                                    help="precluster using cdhitest or mmseqs2", choices=['cdhit','mmseqs'])
+    preclustersettings = design.add_argument_group("cdhit preclustering settings",'This step reduces redundancy in input genomes to speed up pangraph')
     preclustersettings.add_argument("--clustering_inputno_trigger",
-                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9 percent identity",type=int,
+                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9 percent identity\n Set to 0 to always cluster",type=int,
                                   default=5000)
     preclustersettings.add_argument("--clusterident", type=float, default=0.999,
                                     help="Minimum identity to cluster genomes")
-    preclustersettings.add_argument("--lowclusterident", type=float, default=0.85,
-                                    help="Minimum identity to cluster genomes at low threshold (used in cluster2step)")
+
     preclustersettings.add_argument("--clustercov", type=float, default=1,
                                     help="Minimum coverage of genomes over which clusterident must apply (0-1)")
-    preclustersettings.add_argument("--cluster2step",action='store_true',
+
+
+    outlierclustersettings = design.add_argument_group("outlier removal settings","This step removes clusters smaller than outliersizelimit that are distinct at outlierclusterident identity threshold from all other sequences in the input set. Uses ch-hit for clustering")
+    outlierclustersettings.add_argument("--remove_outliers",action='store_true',
                                     help="perform initial high threshold clustering followed by low threshold clustering of representatives, remove low level clusters composed of one high level cluster with <= outliersizelimit members")
-    preclustersettings.add_argument("--outliersizelimit",
+    outlierclustersettings.add_argument("--outliersizelimit",
                                     help="In two step clustering if a cluster is <=outliersizelimit at both high and low identity then it is treated as an outlier",type=int,
                                     default=1)
+    outlierclustersettings.add_argument("--outlierclusterident", type=float, default=0.85,
+                                    help="outlier identity threshold, i.e. if a cluster is <outlierclusterident and <=outliersizelimit members it is treated as an outlier")
+    preclustersettings.add_argument("--outlierclustercov", type=float, default=1,
+                                    help="Minimum coverage of genomes over which clusterident must apply (0-1)")
+
 
     additionalsettings = design.add_argument_group("Additional settings")
 
@@ -1239,33 +1231,28 @@ def main():
 
         filtered_input,overallprops,included,filtered,descriptions = filter_for_nonstandard_inputs(args.input, outloc,args.maxnonspandard,filtered)
         rminp = False
-        if args.cluster2step:
+        altprobes = 0
+        if args.remove_outliers:
             rminp = True
-            logger.info("Using cdhit to cluster genomes in two stages")
-            regstrains,outliersstrains,filtered = cdhit_2step_clust(args, filtered_input,filtered)
-            logger.info("2 stage clustering finished")
+            logger.info("Using cdhit to identify outliers")
+            filtered_input,outliersstrains,filtered = remove_outliers(args, filtered_input, filtered)
+            logger.info("outlier ident finished")
 
-            regprobes = design_probes(args, regstrains, probeprefix, overallprops,rminp,outloc)
-            logger.info("regular probes designed")
-            altprobes = 0
+
             if outliersstrains != False:
                 outloc2 = f"{args.outputfolder}/{args.outputprefix}_outliers"
                 altprobes = design_probes(args, outliersstrains, probeprefix, overallprops,rminp,outloc2)
                 logger.info("outlier probes designed")
-            logger.info(f"dampa design finished. Regular probes: {regprobes}. Outliers probes: {altprobes}")
+
+        if included > args.clustering_inputno_trigger:
+            rminp = True
+            logger.info("Using cdhit to cluster genomes")
+            filtered_input = cdhit_subset(args, filtered_input)
+
+        totalprobes = design_probes(args, filtered_input, probeprefix, overallprops,rminp,outloc)
+        if args.remove_outliers:
+            logger.info(f"dampa design finished. Regular probes: {totalprobes}. Outliers probes: {altprobes}")
         else:
-            if included > args.clustering_inputno_trigger:
-                if args.clusterer == "mmseqs":
-                    rminp = True
-                    logger.info("Using mmseqs to cluster genomes")
-                    filtered_input = mmseqs_subset(args,filtered_input)
-                elif args.clusterer == "cdhit":
-                    rminp = True
-                    logger.info("Using cdhit to cluster genomes")
-                    filtered_input = cdhit_subset(args, filtered_input)
-
-            totalprobes = design_probes(args, filtered_input, probeprefix, overallprops,rminp,outloc)
-
             logger.info(f"dampa design finished. Total probes: {totalprobes}")
 
         write_filtered_genomes(filtered, outloc,descriptions)
