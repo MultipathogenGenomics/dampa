@@ -393,31 +393,42 @@ def select_pangraph_binary():
         arch = "aarch64"
     else:
         logger.error(f"Unsupported architecture: {arch}")
+        return None
 
     # Select OS and libc variant
     if system == "darwin":
-        os_tag = "darwin"
+        if arch == "x86_64":
+            return "pangraph-x86_64-apple-darwin"
+        elif arch == "aarch64":
+            return "pangraph-aarch64-apple-darwin"
     elif system == "linux":
-        # Try to detect musl vs gnu
+        # Check for musl or gnu
         try:
-            with open("/usr/bin/ldd", "rb") as f:
-                if b"musl" in f.read():
-                    os_tag = "linux-musl"
-                else:
-                    os_tag = "linux-gnu"
-        except:
-            os_tag = "linux-gnu"  # Default fallback
+            ldd_output = subprocess.check_output("ldd --version", shell=True, stderr=subprocess.STDOUT).decode()
+            if "musl" in ldd_output:
+                if arch == "x86_64":
+                    return "pangraph-x86_64-unknown-linux-musl"
+                elif arch == "aarch64":
+                    return "pangraph-aarch64-unknown-linux-musl"
+            else:
+                if arch == "x86_64":
+                    return "pangraph-x86_64-unknown-linux-gnu"
+                elif arch == "aarch64":
+                    return "pangraph-aarch64-unknown-linux-gnu"
+        except Exception:
+            # Default to gnu if musl check fails
+            if arch == "x86_64":
+                return "pangraph-x86_64-unknown-linux-gnu"
+            elif arch == "aarch64":
+                return "pangraph-aarch64-unknown-linux-gnu"
     elif system == "windows":
-        os_tag = "windows-gnu.exe"
+        if arch == "x86_64":
+            return "pangraph-x86_64-pc-windows-gnu.exe"
     else:
-        logger.error(f"Unsupported OS: {system}")
+        logger.error(f"Unsupported system: {system}")
+        return None
 
-    binary_name = f"pangraph-{arch}-{os_tag}"
 
-    return binary_name
-
-# Example usage
-print("Selected binary:", select_pangraph_binary())
 
 
 def linear_transitive_chain_merge_fasta(inp, fasta_file, outp):
