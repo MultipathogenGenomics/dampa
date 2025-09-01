@@ -724,9 +724,9 @@ def runprobetoolscapture(args,probes,outloc):
     capture_log = open(outloc + "_capture.log", "w")
     with open(os.devnull, 'w') as devnull:
         if args.nodust:
-            dust = " -y Y"
-        else:
             dust = " -y N"
+        else:
+            dust = " -y Y"
 
         # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
         cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {args.input}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
