@@ -1,10 +1,8 @@
 from Bio import SeqIO
 from collections import defaultdict
 import sys
-def longest_or_fewest_ns_representatives(fasta_file, clstr_file, output_file):
+def longest_or_fewest_ns_representatives(seqs, clstr_file):
     # Load sequences
-    seqs = SeqIO.to_dict(SeqIO.parse(fasta_file, "fasta"))
-    shorttolong = {x[:19]:x for x in seqs.keys()}
     # Parse .clstr file
     clusters = defaultdict(list)
     cluster_id = -1
@@ -20,7 +18,7 @@ def longest_or_fewest_ns_representatives(fasta_file, clstr_file, output_file):
     # Choose representative per cluster
     representatives = []
     for cluster, members in clusters.items():
-        seq_objs = [seqs[shorttolong[sid]] for sid in members if shorttolong[sid] in seqs]
+        seq_objs = [seqs[sid] for sid in members if sid in seqs]
         if len(seq_objs) == 0:
             print("no sequences in cluster", cluster, "skipping")
             continue
@@ -34,13 +32,13 @@ def longest_or_fewest_ns_representatives(fasta_file, clstr_file, output_file):
             best = min(seq_objs, key=lambda s: (s.seq.upper().count('N'), -len(s.seq)))
 
         representatives.append(best)
+    return clusters,representatives
 
-    # Write results
-    with open(output_file, "w") as out_f:
-        SeqIO.write(representatives, out_f, "fasta")
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python cdhit_rep_noN.py <fasta_file> <clstr_file> <output_file>")
         sys.exit(1)
-    longest_or_fewest_ns_representatives(sys.argv[1], sys.argv[2], sys.argv[3])
+    clusters,cdhitreps = longest_or_fewest_ns_representatives(sys.argv[1], sys.argv[2])
+    with open(sys.argv[3], "w") as out_f:
+        SeqIO.write(cdhitreps, out_f, "fasta")
