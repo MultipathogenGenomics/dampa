@@ -5,6 +5,7 @@ import sys
 import subprocess
 import os
 import shutil
+import re
 
 def main():
     version = '0.1.11'
@@ -533,6 +534,11 @@ def makeprobeswinput(out_path, name, targets_path, batch_size, max_probes,existi
         # GARBAGE COLLECTION - Delete low cov seqs
         # os.remove(low_cov_path)
         # Update panel size and max panel size
+
+        if round_counter == 3:
+            # copy name + '_low_cov_seqs.fa' to name + '_round_1_low_cov_seqs.fa'
+            shutil.copy(str(low_cov_path),str(os.path.join(out_path, name + '_round_1_low_cov_seqs.fa')))
+
         panel_size += probes_writen
         max_panel_size = panel_size + batch_size if max_probes == 'MAX' else max_probes
         # Break design loop if no potential probes or no probes writen
@@ -707,7 +713,8 @@ def create_empty_capture_data(targets_path):
         headers, seqs = [], []
         for line in input_file:
             if line[0] == '>':
-                header = line.strip().lstrip('>').split(" ")[0]
+                header = line.strip().lstrip('>')
+                header = re.split(r'[ \t]+', header)[0]
                 headers.append(header)
                 seqs.append('')
             else:
