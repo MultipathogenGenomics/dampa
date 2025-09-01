@@ -1225,6 +1225,7 @@ def main():
     logger.info("Starting")
 
     args = get_args()
+    outloc = f"{args.outputfolder}/{args.outputprefix}"
 
     if args.command == "design":
         if args.version:
@@ -1278,10 +1279,10 @@ def main():
         logger.info("Running dampa eval")
         totalprobes = get_probeno(args.probes)[0]
         if args.inputtype != "capture":
-            finalcaptureout = runprobetoolscapture(args, args.probes)
+            finalcaptureout = runprobetoolscapture(args, args.probes,outloc,args.input)
         else:
             finalcaptureout = args.input
-        make_summaries(args, finalcaptureout,totalprobes)
+        make_summaries(args, finalcaptureout,totalprobes,outloc)
         cleanup(args)
         logger.info("dampa eval finished")
 if __name__ == "__main__":
