@@ -274,13 +274,13 @@ def nucleotide_proportions(sequences,propinit):
 def to_dict_remove_dups(sequences):
     return {record.id: record for record in sequences}
 
-def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
+def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered):
     """
     Filters out genomes with a high proportion of non-standard nucleotides.
     Also trims genomes for trailing As or Ns, and removes genomes with excess Ns or too short sequences.
     Args:
         genomes (str): Path to the input genomes FASTA file.
-        outfolder (str): Path to the output folder.
+        outloc (str): output path and prefix.
         maxnonspandard (float): Maximum allowed proportion of non-standard nucleotides.
 
     Returns:
@@ -309,7 +309,6 @@ def filter_for_nonstandard_inputs(genomes,outfolder,maxnonspandard):
         i.description = ""
         seqlen = len(i.seq)
         if propn > 0.05:
-            logger.info(f"genome {i.id} has excess N and has been excluded")
             excluded += 1
             newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "excess N", "Genome length": seqlen,"nonstandard proportion":propn}
             new_df = pd.DataFrame([newrow])
