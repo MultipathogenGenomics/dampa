@@ -22,7 +22,7 @@ from dampa.vis.plot_over_genomelen import make_genome_plots,replace_short_zeros
 from dampa.tools.gather_probe_depth_stats import make_stats, make_propsplot, process_count_pt
 from dampa.tools.cdhit_rep_noN import longest_or_fewest_ns_representatives
 from dampa import __version__ as dampaversion
-
+from dampa.tools.generate_targets import generate_targets,softmask_low_complexity,shannon_entropy
 
 def mmseqs_subset(args,filtinput):
     """
@@ -267,7 +267,7 @@ def nucleotide_proportions(sequences,propinit):
 def to_dict_remove_dups(sequences):
     return {record.id: record for record in sequences}
 
-def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered):
+def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannonthresh,probelen):
     """
     Filters out genomes with a high proportion of non-standard nucleotides.
     Also trims genomes for trailing As or Ns, and removes genomes with excess Ns or too short sequences.
@@ -341,8 +341,9 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered):
                 filtered = pd.concat([filtered, new_df], ignore_index=True)
                 notrimmed -= 1
             else:
-                outgenomes.append(i)
-                added.append(i.id)
+                masked_genome = softmask_low_complexity(i,window=probelen,cutoff=shannonthresh)
+                outgenomes.append(masked_genome)
+                added.append(masked_genome.id)
                 included += 1
 
     outpath = outloc+"_filtered_input.fasta"
@@ -423,7 +424,7 @@ def select_pangraph_binary():
 
 
 
-def linear_transitive_chain_merge_fasta(inp, fasta_file, outp,lowdepthnodes):
+def linear_transitive_chain_merge_fasta(inp, fasta_file,lowdepthnodes):
     """
     Merge sequences in a GFA file based on linear transitive chains.
 
@@ -514,13 +515,7 @@ def linear_transitive_chain_merge_fasta(inp, fasta_file, outp,lowdepthnodes):
 
     outnodes = unmerged_records + merged_records
 
-    # sizefiltnodes = [rec for rec in outnodes if len(rec.seq) >= 120]  #TODO Filter out sequences shorter than 120bp but this may be problematic for some graphs
-
-
-    # Write output
-    output_file = outp
-    SeqIO.write(outnodes, output_file, "fasta")
-    return output_file
+    return outnodes
 
 def remove_belowdepth_nodes(gfa_file, depthcut):
 
@@ -540,6 +535,7 @@ def remove_belowdepth_nodes(gfa_file, depthcut):
             if depth <= depthcut:
                 nodes_to_remove.add(node_id)
     return list(nodes_to_remove)
+
 
 
 def run_pangraph(args,filtinput,outloc):
@@ -583,13 +579,35 @@ def run_pangraph(args,filtinput,outloc):
             lowdepthnodes = remove_belowdepth_nodes(f"{outloc}_pangenome.gfa", args.pangraphdepth)  # Remove nodes below a certain depth
         else:
             lowdepthnodes = []
-        linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",f"{outloc}_pangenome_lin.fa",lowdepthnodes)# Remove the log file if not keeping logs
+        merged_seqs = linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",lowdepthnodes)# Remove the log file if not keeping logs
+        merged_masked_seqs = [softmask_low_complexity(x,args.probelen,args.shannonthresh) for x in merged_seqs]
+        SeqIO.write(merged_masked_seqs, f"{outloc}_pangenome_lin.fa", "fasta")
         # terminal_node_additional_clustering()
 
         logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
     return
+
+def shannon_filter(seqrecords,threshold):
+    """
+    Filters sequences based on Shannon entropy.
+
+    Args:
+        seqrecords (list): List of SeqRecord objects.
+        threshold (float): Shannon entropy threshold.
+
+    Returns:
+        list: Filtered list of SeqRecord objects.
+    """
+    filtered = []
+    removed = []
+    for x in seqrecords:
+        if shannon_entropy(str(x.seq)) > threshold:
+            filtered.append(x)
+        else:
+            removed.append(x)
+    return filtered,removed
 
 def run_finalprobetools(args, inprobes,originput,outloc):
     """
@@ -617,9 +635,11 @@ def run_finalprobetools(args, inprobes,originput,outloc):
 
     # Check if the expected output file is present
     if os.path.exists(finalprobes):
+        shannonfilt,removed = shannon_filter(SeqIO.parse(finalprobes, "fasta"), args.shannonthresh)
+        SeqIO.write(shannonfilt,inprobes,"fasta")# Attempt to parse the final probes file to ensure it's valid
         shutil.move(finalprobes, inprobes)  # Move the final probes file to the input probes path
         totaprobes, addedprobes = get_probeno(inprobes, "_round_")  # Get the total and added probes count
-        logger.info(f"Generated {addedprobes} additional probes using probetools")
+        logger.info(f"{len(removed)} probes were removed by Shannon entropy filter. {addedprobes} additional probes generated using probetools.")
         if not args.keeplogs:
             os.remove(outloc + "_probetools.log")  # Remove the log file if not keeping logs
         return f"{finalpref}_capture.pt", totaprobes  # Return the final capture file path and total probes count
@@ -698,7 +718,7 @@ def load_capture_data(capture_path,probetools0covnmin):
     # print(f' Total targets loaded: {"{:,}".format(len(capture_data))}')
     return capture_data
 
-def runprobetoolscapture(args,probes,outloc):
+def runprobetoolscapture(args,probes,outloc,genomes):
     """
     Runs the Probetools capture step.
 
@@ -718,7 +738,7 @@ def runprobetoolscapture(args,probes,outloc):
             dust = " -y Y"
 
         # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
-        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {args.input}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
+        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {genomes}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{outloc}_capture.pt"
     if os.path.exists(outf):
@@ -755,7 +775,7 @@ def strip_polyA(s):
 
     return s
 
-def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_step,maxambig,probeprefix=""):
+def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_step,maxambig,shannonthresh,probeprefix=""):
     """
     Splits a pangenome into probes of specified length and step size.
 
@@ -771,6 +791,8 @@ def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_st
     """
     outprobes = []
     totalprobes = 0
+    entfilt = 0
+    ambigfilt = 0
     for record in SeqIO.parse(input_fasta, "fasta"):
         sequence = str(record.seq)
         seq_id = record.id
@@ -787,11 +809,13 @@ def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_st
             if probes and probes[-1][1] < seq_length:
                 probes.append((last_probe_start, seq_length))
             seqno = 1
+
             # Print probes
             for start, end in probes:
                 piece = sequence[start:end]
                 numambig = get_ambig_count(piece)
-                if numambig <= maxambig:
+                shannon = shannon_entropy(piece)
+                if numambig <= maxambig and shannon > shannonthresh:
                     # Create a new SeqRecord for each piece
                     piece_id = f"{seq_id}_piece_{seqno}"
                     seqno+=1
@@ -799,9 +823,14 @@ def split_pangenome_into_probes(input_fasta, output_fasta, probe_length,probe_st
                     piece_record = SeqRecord.SeqRecord(Seq.Seq(piece),id=probeprefixm+piece_id,description="")
                     outprobes.append(piece_record)
                     totalprobes+=1
+
+                elif shannon <= shannonthresh:
+                    entfilt+=1
+                elif numambig > maxambig:
+                    ambigfilt+=1
     # Write the probes to the output file
     SeqIO.write(outprobes, output_fasta, "fasta")
-    logger.info(f"Extracted {totalprobes} probes from pangenome")
+    logger.info(f"Extracted {totalprobes} probes from pangenome. {entfilt} probes filtered for low complexity, {ambigfilt} probes filtered for excess ambiguous bases")
 
 def make_summaries(args,ptcountfile,totalprobes,outloc):
     """
@@ -855,6 +884,7 @@ def setup_logging():
     logger = logging.getLogger("runtime_logger")
     logger.setLevel(logging.DEBUG)
     logger.addHandler(handler)
+    logger.propagate = False
     return logger
 
 def get_probeno(probefile,subsetstr=""):
@@ -959,15 +989,38 @@ def cleanup(args,filtgenomes=""):
                 os.remove(i)
     logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
+def mask_fasta(input_fasta, output_fasta, window=120, cutoff=1.6):
+    """
+    Masks low-complexity regions in a FASTA file using Shannon entropy.
+
+    Args:
+        input_fasta (str): Path to the input FASTA file.
+        output_fasta (str): Path to the output masked FASTA file.
+        window (int): Window size for calculating Shannon entropy.
+        cutoff (float): Shannon entropy cutoff for masking.
+
+    Returns:
+        None
+    """
+    masked_records = []
+    for record in SeqIO.parse(input_fasta, "fasta"):
+        masked_record = softmask_low_complexity(record, window=window, cutoff=cutoff)
+        masked_records.append(masked_record)
+    SeqIO.write(masked_records, output_fasta, "fasta")
+    logger.info(f"Masked low-complexity regions in input genomes")
+
 def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
     probename = outloc + "_probes.fasta"
     pangenomefasta = outloc + "_pangenome_lin.fa"
+    pangenome_graph_json = outloc + ".json"
+    targets = outloc + "_targets.fasta"
     run_pangraph(args,
-                 filtered_input,outloc)  # TODO possibly add check where probes are mapped onto each other in a progressive way. each time coverage of a probe by other probes is >1 across full length (at some high identity) then remove probe that is covered would remove lots of similar probes from ends of pancontigs?
+                 filtered_input,outloc)
 
 
-    split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig, probeprefix)
-
+    split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig,args.shannonthresh, probeprefix)
+    targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets)
+    logging.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
     if not args.skip_padding:
         make_padded_probes(pangenomefasta, probename, args.minlenforpadding, probeprefix=probeprefix)
     if not args.skip_probetoolsfinal:
@@ -981,7 +1034,7 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
         if not args.skipsubambig:
             subambig(probename, overallprops)
         if not args.skip_summaries:
-            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input)
+            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input,args.input)
             make_summaries(args, finalcaptureout, totalprobes,outloc)
     if rminp:
         cleanup(args, filtered_input)
@@ -1058,6 +1111,7 @@ def get_args():
     general.add_argument("-s", "--probestep", type=int, default=120, help="step of probes (for no overlap set to same as probelen)")
     general.add_argument("--skipsubambig",
                         help="do NOT substitute ambiguous nucleotides (by default N or other ambiguous nucleotides are substituted for ATGC in a random selection weighted by proportions in input genomes",action='store_true')
+    general.add_argument("--shannonthresh", type=float, default=1.5, help="minimum shannon entropy of probes and reported coverage regions (filters out low complexity probes/regions)")
 
 
 
@@ -1102,7 +1156,6 @@ def get_args():
                                     help="outlier identity threshold, i.e. if a cluster is <outlierclusterident and <=outliersizelimit members it is treated as an outlier")
     preclustersettings.add_argument("--outlierclustercov", type=float, default=1,
                                     help="Minimum coverage of genomes over which clusterident must apply (0-1)")
-
 
     additionalsettings = design.add_argument_group("Additional settings")
 
@@ -1176,6 +1229,8 @@ def get_args():
     probetooleval.add_argument("--nodust",
                                     help="Do not run low complexity filter in BLAST (within probetools). If sample has very low GC or is very repetitive this option can be enabled to prevent low complexity regions from being removed",
                                     action='store_true')
+    probetooleval.add_argument("-l", "--probelen", type=int, default=120,help="length of output probes")
+    probetooleval.add_argument("--shannonthresh", type=float, default=1.5, help="minimum shannon entropy of probes and reported coverage regions (filters out low complexity probes/regions)")
 
     additionaleval= evaluate.add_argument_group("Additional settings")
 
@@ -1229,7 +1284,7 @@ def main():
 
         filtered = pd.DataFrame(columns=["genome id","genome description","filter reason","Genome length","nonstandard proportion"])
 
-        filtered_input,overallprops,included,filtered,descriptions = filter_for_nonstandard_inputs(args.input, outloc,args.maxnonspandard,filtered)
+        filtered_input,overallprops,included,filtered,descriptions = filter_for_nonstandard_inputs(args.input, outloc,args.maxnonspandard,filtered,args.shannonthresh,args.probelen)
         rminp = False
         altprobes = 0
         if args.remove_outliers:
@@ -1263,7 +1318,13 @@ def main():
         logger.info("Running dampa eval")
         totalprobes = get_probeno(args.probes)[0]
         if args.inputtype != "capture":
-            finalcaptureout = runprobetoolscapture(args, args.probes,outloc,args.input)
+            mask=True
+            if mask:
+                masked_input = outloc + "_masked_input.fasta"
+                mask_fasta(args.input,masked_input , window=args.probelen, cutoff=args.shannonthresh)
+                finalcaptureout = runprobetoolscapture(args, args.probes,outloc,masked_input)
+            else:
+                finalcaptureout = runprobetoolscapture(args, args.probes, outloc, args.input)
         else:
             finalcaptureout = args.input
         make_summaries(args, finalcaptureout,totalprobes,outloc)

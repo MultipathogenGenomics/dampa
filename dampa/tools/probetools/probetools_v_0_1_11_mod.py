@@ -351,7 +351,8 @@ def capture(out_path, name, targets_path, probes_path, min_id, min_length, threa
     check_input([targets_path, probes_path])
     blast_path = os.path.join(out_path, name + '_blast_results.tsv')
     align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, threads,rundust)
-    capture_data = create_empty_capture_data(targets_path)
+    # capture_data = create_empty_capture_data(targets_path)
+    capture_data = create_empty_capture_data_w_soft_mask(targets_path)
     capture_data = add_BLAST_results_to_capture_data(blast_path, capture_data, min_id, min_length)
     capture_path = os.path.join(out_path, name + '_capture.pt')
     write_capture_data(capture_path, capture_data)
@@ -442,7 +443,8 @@ def make_probes(out_path, name, targets_path, batch_size, max_probes, cov_target
 def get_data_from_inputprobes(out_path,targets_path,existingprobes,name,threads,min_id, min_capture_length,rundust):
     round_name = name + f'_round_1'
     blast_path = os.path.join(out_path, name + '_blast_results.tsv')
-    capture_data = create_empty_capture_data(targets_path)
+    capture_data = create_empty_capture_data_w_soft_mask(targets_path)
+    # capture_data = create_empty_capture_data(targets_path)
 
     print(targets_path)
 
@@ -700,12 +702,39 @@ def align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, th
     else:
         dust=""
     terminal_command = (f"blastn -db {targets_path} -query {probes_path} -max_target_seqs {num_targets}"
-                        f" -num_threads {threads} -outfmt 6 -word_size 13{dust} > {blast_path}")
+                        f" -num_threads {threads} -task blastn -outfmt 6 -word_size 13{dust} > {blast_path}")
     finished_process = subprocess.run(terminal_command, shell=True)#, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if finished_process.returncode != 0:
         print(f'\nERROR: blastn terminated with errors while aligning probes to target seqs (Error code: {finished_process.returncode}).\n')
         exit(1)
 
+
+def create_empty_capture_data_w_soft_mask(targets_path):
+    print(f'Extracting target names and seqs from {targets_path}...')
+    with open(targets_path, 'r') as input_file:
+        headers, seqs = [], []
+        for line in input_file:
+            if line[0] == '>':
+                header = line.strip().lstrip('>')
+                header = re.split(r'[ \t]+', header)[0]
+                headers.append(header)
+                seqs.append('')
+            else:
+                seqs[-1] += line.strip()
+    for header in headers:
+        if headers.count(header) > 1:
+            print(f'\nERROR: Header {header} appears more than once in {targets_path}.\n')
+            exit(1)
+        if ' ' in header:
+            print(f'\nERROR: Header {header} contains spaces.\n')
+            exit(1)
+    capture_data = {}
+    for header, seq in zip(headers, seqs):
+        #list of 0 where seq is uppercase, 1 where seq is lowercase or non-ATGC
+        newdepth = [0 if base.isupper() and base in ["A","T","G","C"] else 1 for base in seq]
+        capture_data[header] = (seq, newdepth)
+    print(f' Total targets loaded: {"{:,}".format(len(capture_data))}')
+    return capture_data
 
 def create_empty_capture_data(targets_path):
     print(f'Extracting target names and seqs from {targets_path}...')
@@ -727,6 +756,7 @@ def create_empty_capture_data(targets_path):
 
             print(f'\nERROR: Header {header} contains spaces.\n')
             exit(1)
+
     capture_data = {header: (seq, [0] * len(seq)) for header, seq in zip(headers, seqs)}
     print(f' Total targets loaded: {"{:,}".format(len(capture_data))}')
     return capture_data
