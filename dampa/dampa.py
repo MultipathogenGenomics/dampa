@@ -306,26 +306,23 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
         descriptions[i.id] = str(i.description)
         i.description = ""
         seqlen = len(i.seq)
+        new_df = ""
         if propn > 0.05:
             excluded += 1
             newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "excess N", "Genome length": seqlen,"nonstandard proportion":propn}
             new_df = pd.DataFrame([newrow])
-            filtered = pd.concat([filtered, new_df], ignore_index=True)
         elif float(propnonstandard) >= float(maxnonspandard) and i.id not in added:
             excluded += 1
             newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "excess non-standard", "Genome length": seqlen,"nonstandard proportion":propnonstandard}
             new_df = pd.DataFrame([newrow])
-            filtered = pd.concat([filtered, new_df], ignore_index=True)
         elif seqlen < 100:
             excluded += 1
             newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "too short (<100bp)", "Genome length": seqlen,"nonstandard proportion":""}
             new_df = pd.DataFrame([newrow])
-            filtered = pd.concat([filtered, new_df], ignore_index=True)
         elif (props["C"]+props["c"]) < 0.01:
             excluded += 1
             newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "very low C content, probable 3base genome from genetic signatures", "Genome length": seqlen,"nonstandard proportion":""}
             new_df = pd.DataFrame([newrow])
-            filtered = pd.concat([filtered, new_df], ignore_index=True)
         else:
             oldi = copy.copy(i)
             i = strip_polyA(i)
@@ -336,19 +333,22 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
                           "filter reason": "trimmed polyA (not removed)",
                           "Genome length": seqlen, "nonstandard proportion / metric": trimmed}
                 new_df = pd.DataFrame([newrow])
-                filtered = pd.concat([filtered, new_df], ignore_index=True)
                 notrimmed +=1
             if len(i.seq) < 100:
                 excluded += 1
                 newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "too short (<100bp)",
                           "Genome length": seqlen, "nonstandard proportion": ""}
                 new_df = pd.DataFrame([newrow])
-                filtered = pd.concat([filtered, new_df], ignore_index=True)
                 notrimmed -= 1
             else:
                 outgenomes.append(i)
                 added.append(i.id)
                 included += 1
+        if new_df != "":
+            if not filtered.empty:
+                filtered = pd.concat([filtered, new_df], ignore_index=True)
+            else:
+                filtered = new_df
 
     with Pool(processes=threads) as pool:
         masked_genomes = pool.map(_softmask_worker, [(i, probelen, shannonthresh) for i in outgenomes])
