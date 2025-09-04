@@ -344,7 +344,7 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
                 outgenomes.append(i)
                 added.append(i.id)
                 included += 1
-        if new_df != "":
+        if not new_df.empty:
             if not filtered.empty:
                 filtered = pd.concat([filtered, new_df], ignore_index=True)
             else:
@@ -1294,13 +1294,13 @@ def main():
 
         filtered = pd.DataFrame(columns=["genome id","genome description","filter reason","Genome length","nonstandard proportion"])
 
-        filtered_input,overallprops,included,filtered,descriptions = filter_for_nonstandard_inputs(args.input, outloc,args.maxnonspandard,filtered,args.shannonthresh,args.probelen)
+        filtered_input,overallprops,included,filtered,descriptions = filter_for_nonstandard_inputs(args.input, outloc,args.maxnonspandard,filtered,args.shannonthresh,args.probelen,args.threads)
         rminp = False
         altprobes = 0
         if args.remove_outliers:
             rminp = True
             logger.info("Using cdhit to identify outliers")
-            filtered_input,outliersstrains,filtered = remove_outliers(args, filtered_input, filtered)
+            outliersstrains,filtered = remove_outliers(args, filtered_input, filtered)
             logger.info("outlier ident finished")
 
 
