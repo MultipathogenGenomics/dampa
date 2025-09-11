@@ -99,6 +99,7 @@ def make_propsplot(propcovs, names, maxcheck, outpath, clusters=False):
         plt.tight_layout()
         # plt.show()
         plt.savefig(f"{outpath}_perc_genome_cov_stripplot.pdf")
+        plt.close()
     else:
         indatamelt = indata.reset_index()
         indatamelt = indatamelt.melt(id_vars=['index'],var_name="Sample", value_name="Values")
@@ -113,6 +114,7 @@ def make_propsplot(propcovs, names, maxcheck, outpath, clusters=False):
                 medianprops=dict(color='black', linewidth=2),zorder=2,showfliers=False)
         plt.tight_layout()
         plt.savefig(f"{outpath}_perc_genome_cov_boxplots.pdf")
+        plt.close()
 
 
 def make_stats(propcovs, names, maxcheck, meancovs, outpath, probes, report0covperc):

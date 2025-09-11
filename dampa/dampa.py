@@ -75,6 +75,11 @@ def cdhit_subset(args,filtinput):
     subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
     cdhitrepsout = f"{outloc}_cdhit_reps.fasta"
     clusters,cdhitreps = longest_or_fewest_ns_representatives(inseqs,f"{outloc}_cdhit_reps.clstr")
+
+    if len(cdhitreps) == 1:
+        dupe = copy.copy(cdhitreps[0])
+        dupe.id = dupe.id+"_dupe"
+        cdhitreps = [cdhitreps[0],dupe]
     # Write results
     with open(cdhitrepsout, "w") as out_f:
         SeqIO.write(cdhitreps, out_f, "fasta")
@@ -122,21 +127,21 @@ def remove_outliers(args,filtinput,filtered):
     logger.info(f"Low cutoff clustering complete. {len(lowcdhitreps)} representative sequences generated.")
 
     regular,outliers = split_to_reg_or_outliers(lowclusters, strain_to_highcluster_size,highcdhitreps,inseqs,outlier_size_limit=args.outliersizelimit)
-
+    outlierids = [outlier.id for outlier in outliers]
     for outlier in outliers:
         seqlen = len(outlier.seq)
         newrow = {"genome id": outlier.id, "genome description": outlier.description, "filter reason": "outlier singleton genomes", "Genome length": seqlen,
                   "nonstandard proportion": ""}
         new_df = pd.DataFrame([newrow])
         filtered = pd.concat([filtered, new_df], ignore_index=True)
-
-    if len(regular) > 1:
-        SeqIO.write(regular, filtinput, "fasta")
-    elif len(regular) == 1:
-        dupe = copy.copy(regular[0])
+    inseqs_rm_outliers = [inseqs[i] for i in inseqs if inseqs[i].id not in outlierids]
+    if len(inseqs_rm_outliers) > 1:
+        SeqIO.write(inseqs_rm_outliers, filtinput, "fasta")
+    elif len(inseqs_rm_outliers) == 1:
+        dupe = copy.copy(inseqs_rm_outliers[0])
         dupe.id = dupe.id+"_dupe"
-        regular = [regular[0],dupe]
-        SeqIO.write(regular, filtinput, "fasta")
+        inseqs_rm_outliers = [inseqs_rm_outliers[0],dupe]
+        SeqIO.write(inseqs_rm_outliers, filtinput, "fasta")
     else:
         logger.error(f"\n#########\nNo regular strains found in high cutoff clusters.\n#########\n")
         sys.exit()
@@ -198,7 +203,7 @@ def split_to_reg_or_outliers(lowclusters, strain_to_highcluster_size,highcdhitre
         logger.info(f"All strains are in low cutoff clusters. No outliers will be generated.")
         regstrains = copy.deepcopy(altstrains)
         altstrains = []
-    elif prop_alt_clust*100 >= 0.1:
+    elif prop_alt_clust >= 0.1:
         logger.info(f"Over 10% of high cutoff clusters ({prop_alt_clust*100:.2f}%) are also singletons at low cutoff. Outliers will not be generated.")
         regstrains = copy.deepcopy(highcdhitreps)
         altstrains = []
@@ -306,7 +311,7 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
         descriptions[i.id] = str(i.description)
         i.description = ""
         seqlen = len(i.seq)
-        new_df = ""
+        new_df = pd.DataFrame
         if propn > 0.05:
             excluded += 1
             newrow = {"genome id": i.id, "genome description": i.description, "filter reason": "excess N", "Genome length": seqlen,"nonstandard proportion":propn}
