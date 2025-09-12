@@ -2,6 +2,8 @@ import pypangraph as pp
 from Bio import SeqIO,SeqRecord,Seq
 import math
 from collections import Counter
+from dampa.tools.union_coverage import union_coverage
+
 
 def shannon_entropy(seq: str) -> float:
     """Calculate Shannon entropy of a DNA sequence string."""
@@ -98,7 +100,7 @@ def get_args():
     parser.add_argument('--outfile', type=str, required=True, help='output fasta file of path consensus sequences covering all nodes.')
     return parser.parse_args()
 
-def generate_targets(injson, nthresh,lenthresh,outfile):
+def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
     graph = pp.Pangraph.from_json(injson)
     nodetoblock = dict(zip(graph.nodes.df.index, graph.nodes.df["block_id"]))
     block_to_ignore = rm_N_blocks(graph,nthresh)
@@ -114,17 +116,18 @@ def generate_targets(injson, nthresh,lenthresh,outfile):
             blockid = nodetoblock[str(node)]
             block = graph.blocks[blockid]
             conseq = block.consensus()
-            # if len(conseq) < 120:
-            #     print(pathname,strain_to_added_block[pathid]["new_values"],len(conseq))
-            #     print(block.consensus())
             outseq += str(conseq)
 
         outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=pathname+"_path_consensus", description="")
-        maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)
+        maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)#TODO parameterize
         targetseqs.append(maskedseq)
     # print(f"writing {len(targetseqs)} outputs")
     SeqIO.write(targetseqs, outfile, "fasta")
-    return outfile,len(targetseqs)
+
+    original, final,removed, nfilt = union_coverage(outfile,outfile,min_ident=99.0,min_covered_frac=0.99,non_n_stretch=90)#TODO parameterize
+    if logger:
+        logger.info(f"Reduced target number: Original: {original}, Kept: {final}, Removed: {removed}, N-filtered: {nfilt}")
+    return outfile,final
 
 def main():
     args = get_args()

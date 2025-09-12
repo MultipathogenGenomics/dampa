@@ -1034,7 +1034,7 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
 
 
     split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig,args.shannonthresh, probeprefix)
-    targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets)
+    targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
     logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
     if not args.skip_padding:
         make_padded_probes(pangenomefasta, probename, args.minlenforpadding, probeprefix=probeprefix)
