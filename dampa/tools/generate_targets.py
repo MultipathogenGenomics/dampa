@@ -50,6 +50,20 @@ def non_recursive_findcomponent(pangraph, newpaths=None, searched=None, componen
             continue
 
 
+
+def find_species(components):
+    species = {}
+    for c in components:
+        for path in components[c]:
+            # s = "_".join(path.split(".")[0].split("_")[:2])
+            s = path.split("_")[0]
+            if c not in species:
+                species[c] = set()
+                species[c].add(s)
+            else:
+                species[c].add(s)
+    return species
+
 def shannon_entropy(seq: str) -> float:
     """Calculate Shannon entropy of a DNA sequence string."""
     counts = Counter(seq.upper())
