@@ -1,5 +1,5 @@
 import pypangraph as pp
-from Bio import SeqIO,SeqRecord,Seq
+from Bio import SeqIO,SeqRecord,Seq,motifs
 import math
 from collections import Counter
 from dampa.tools.union_coverage import union_coverage
@@ -279,15 +279,31 @@ def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=Non
         pathname = graph.paths.idx_to_name[pathid]
         pathobj = graph.paths[pathname]
         outseq = ""
+        blockids = []
         for node in pathobj.nodes:
             blockid = nodetoblock[str(node)]
+            blockids.append(blockid)
             block = graph.blocks[blockid]
             conseq = block.consensus()
             outseq += str(conseq)
 
-        outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=pathname+"_path_consensus", description="")
-        maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)#TODO parameterize
+
+        outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=f"{pathname}_path_consensus", description="")
+        maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)  # TODO parameterize
         targetseqs.append(maskedseq)
+        # print("masked",maskedseq.id)
+    if len(targetseqs) == 0:
+        return []
+    if blockno > 1:
+        original, final, removed, nfilt, keptidls, kepttargets = union_coverage(targetseqs, outfile, min_ident=99.0,
+                                                                                min_covered_frac=0.99,
+                                                                                non_n_stretch=90)  # TODO parameterize
+
+        if len(kepttargets) == 0:
+            return []
+        paddedseqs, paddedids = pad_short_paths(graph, kepttargets)
+    else:
+        return targetseqs
     # print(f"writing {len(targetseqs)} outputs")
 
     return paddedseqs
@@ -394,3 +410,6 @@ def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
 def main():
     args = get_args()
     generate_targets(args.graphjson,args.nthresh,args.lenthresh,args.outfile)
+
+if __name__ == "__main__":
+    main()
