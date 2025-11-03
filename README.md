@@ -33,6 +33,7 @@ using pip you must install blast and vsearch yourself
 
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/downloads.svg)](https://anaconda.org/bioconda/dampa)
 [![Anaconda-Server Badge](https://anaconda.org/bioconda/dampa/badges/version.svg)](https://anaconda.org/bioconda/dampa)
+[![DOI](https://zenodo.org/badge/937867736.svg)](https://doi.org/10.5281/zenodo.17510009)
 
 ## Usage
 
