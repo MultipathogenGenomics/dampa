@@ -267,8 +267,13 @@ def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=Non
 
     block_to_ignore = rm_N_blocks(graph, nthresh)
     # print(f"removed {len(block_to_ignore)} blocks for N proportion over {nthresh}")
-    block_to_ignore = filter_short_terminal_blocks(graph,lenthresh,block_to_ignore,)
-    chosen_paths,strain_to_added_block = greedy_cover(graph.nodes.df,block_to_ignore,colA="path_id", colB="block_id")
+    block_to_ignore = filter_short_terminal_blocks(graph, lenthresh, block_to_ignore)
+    if blockno > 1:
+        chosen_paths, strain_to_added_block = greedy_cover(filt_nodedf, block_to_ignore, colA="path_id", colB="block_id")
+    else:
+        chosen_paths = [pathidlist[0]]
+    if len(chosen_paths) == 0:
+        return []
     targetseqs = []
     for pathid in chosen_paths:
         pathname = graph.paths.idx_to_name[pathid]
