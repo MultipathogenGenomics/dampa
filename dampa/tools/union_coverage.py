@@ -9,6 +9,8 @@ def runblast(targets,blastout,ident):
     finished_process = subprocess.run(terminal_command, shell=True)#, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if finished_process.returncode != 0:
         print(f'\nERROR: makeblastdb terminated with errors while indexing target seqs (Error code: {finished_process.returncode}).\n')
+        print(finished_process.stderr)
+        print(finished_process.stdout)
         exit(1)
     terminal_command = (f"blastn -db {targets} -query {targets} -task megablast -perc_identity {ident} -dust no -soft_masking false -outfmt '6 qseqid sseqid pident qstart qend qlen length' > {blastout}")
     finished_process = subprocess.run(terminal_command, shell=True)#, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -45,16 +47,17 @@ def has_clean_stretch(seq, min_len=90):
 
 def union_coverage(targets,outtargets,min_ident=99.0,min_covered_frac=99.0,non_n_stretch=90):
 
-    base = targets.replace("_targets.fasta","").replace("_targets.fa","")
-    targets_nfilt = base+"targets_nfilt.fasta"
+    base = outtargets.replace(".fasta","").replace(".fa","")
+    targets_nfilt = base+"_nfilt.fasta"
     tsv = base+"all_vs_all.tsv"
 
-    intargets = SeqIO.to_dict(SeqIO.parse(targets, "fasta"))
+    intargets = {s.id:s for s in targets}
 
     usabletargets = [s for s in intargets.values() if has_clean_stretch(str(s.seq), non_n_stretch)]
     nfilt = len(intargets) - len(usabletargets)
     usable_dict = {s.id: s for s in usabletargets}
-
+    if not usabletargets:
+        return 0,0,0,nfilt,set(),[]
     SeqIO.write(usabletargets, targets_nfilt, "fasta")
 
     runblast(targets_nfilt, tsv, min_ident)
@@ -99,9 +102,9 @@ def union_coverage(targets,outtargets,min_ident=99.0,min_covered_frac=99.0,non_n
     for k in kept:
         keepseq = usable_dict[k]
         keep.append(keepseq)
-    SeqIO.write(keep, outtargets, "fasta")
+    # SeqIO.write(keep, outtargets, "fasta")
     if os.path.exists(targets_nfilt):
         os.remove(targets_nfilt)
     if os.path.exists(tsv):
         os.remove(tsv)
-    return len(lengths), len(kept), len(removed), nfilt
+    return len(lengths), len(kept), len(removed), nfilt,kept,keep
