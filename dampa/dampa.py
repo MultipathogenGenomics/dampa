@@ -597,6 +597,15 @@ def run_pangraph(args,filtinput,outloc):
         merged_seqs = linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",lowdepthnodes)# Remove the log file if not keeping logs
         merged_masked_seqs = [softmask_low_complexity(x,args.probelen,args.shannonthresh) for x in merged_seqs]
         SeqIO.write(merged_masked_seqs, f"{outloc}_pangenome_lin.fa", "fasta")
+
+        if args.unioncov:
+            shutil.copyfile(f"{outloc}_pangenome_lin.fa",f"{outloc}_pangenome_lin_orig.fa")
+            inseq = SeqIO.parse(f"{outloc}_pangenome_lin.fa", "fasta")
+            original,final,removed,nfilt, kept, keep = union_coverage(inseq,f"{outloc}_pangenome_lin.fa")
+            if len(keep) == 0:
+                return False
+            logger.info(
+                f"Reduced pangenome node number: Original: {original}, Kept: {final}, Removed: {removed}, N-filtered: {nfilt}")
         # terminal_node_additional_clustering()
 
         logger.info("Pangenome graph linear chain merging completed")
@@ -1195,6 +1204,8 @@ def get_args():
                         default='90')
     additionalsettings.add_argument("--skip_probetoolsfinal",
                         help="do NOT run final probe design step. i.e. this step uses probetools to design probes to regions that are not represented in the pangenome",action='store_true')
+    additionalsettings.add_argument("--unioncov",
+                        help="minimise pangenome graph size by removing nodes represented elsewhere in sections",action='store_true')
 
 
     additionalsettings.add_argument("-t","--threads",
