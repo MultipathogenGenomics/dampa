@@ -159,10 +159,113 @@ def get_args():
     parser.add_argument('--outfile', type=str, required=True, help='output fasta file of path consensus sequences covering all nodes.')
     return parser.parse_args()
 
-def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
-    graph = pp.Pangraph.from_json(injson)
-    nodetoblock = dict(zip(graph.nodes.df.index, graph.nodes.df["block_id"]))
-    block_to_ignore = rm_N_blocks(graph,nthresh)
+def pad_short_paths(graph,usedpaths):
+    """
+    steps to add padding to short paths based on their position in longer paths
+    1. for each path, get the block
+    2. for each block, get the paths that contain it
+    3. for each path that contains the block, get the length of the path
+    4. if the path is shorter than some % of the longest path, add padding to the short path equivalent to the nodes covered by the longer path but missing in the shorter
+    5. write out the padded paths to a new fasta file
+    """
+    outtargets = {s.id:s for s in usedpaths}
+    pathdf = graph.nodes.df
+
+    # usedpaths = ["LY720046.1"]
+    usedpathstrim = [x.id.replace("_path_consensus","") for x in usedpaths]
+    usedpathidx_to_name = {x:graph.paths.id_to_pos[x] for x in usedpathstrim}
+    usedpathidx = usedpathidx_to_name.values()
+
+    usedpathlens = {graph.paths.list[p].name: graph.paths.list[p].nuc_len for p in usedpathidx}
+    # get path names that have a length < 95% of the longest path
+    if len(usedpathlens) < 4:
+        thresh = max(usedpathlens.values())
+    else:
+        thresh = stats.quantiles(usedpathlens.values(),n=4)[2]
+    shortpaths = [p for p in usedpathlens if usedpathlens[p] < thresh]
+
+    outseqs = []
+    padded=[]
+    for pathname in shortpaths:
+        longestoverlappingpath = ("x", 0)
+        pathindex = graph.paths.id_to_pos[pathname]
+        shortblocks = pathdf[pathdf["path_id"] == pathindex]
+
+        for blockid in shortblocks["block_id"]:
+            blockpaths = pathdf[pathdf["block_id"] == blockid]["path_id"].tolist()
+            blockpaths = [p for p in blockpaths if p in usedpathidx if p != pathindex]
+            if len (blockpaths) == 0:
+                continue
+            pathlens = {p: graph.paths.list[p].nuc_len for p in blockpaths}
+            maxlen = max(pathlens.values())
+            maxlenid = max(pathlens, key=pathlens.get)
+
+            if maxlen > longestoverlappingpath[1]:
+                longestoverlappingpath = (maxlenid,maxlen)
+
+        if longestoverlappingpath[0] == "x":
+            outseqs.append(outtargets[pathname+"_path_consensus"])
+            continue
+
+        # print("newlongest",graph.paths.list[longestoverlappingpath[0]].name,longestoverlappingpath[0],longestoverlappingpath[1],pathname,pathindex,graph.paths.list[pathindex].nuc_len)
+        """
+        get overlapping blocks from longest path.
+        """
+        shortblockslist = shortblocks["block_id"].tolist()
+
+        longpathid = longestoverlappingpath[0]
+        longpathname = graph.paths.list[longestoverlappingpath[0]].name
+        longpathblocks = pathdf[pathdf["path_id"] == longpathid]["block_id"].tolist()
+        overlaps = [b for b in shortblockslist if b in longpathblocks]
+
+        longpathoverlapnodes = pathdf[(pathdf["path_id"] == longpathid)&(pathdf["block_id"].isin(overlaps))]
+        shortpathoverlapnodess = pathdf[(pathdf["path_id"] == pathindex)&(pathdf["block_id"].isin(overlaps))]
+        """get first and last block_id in longpathoverlapnodes based on start and end positions"""
+        longstartblock = longpathoverlapnodes.sort_values("start").iloc[0]
+        longendblock = longpathoverlapnodes.sort_values("end").iloc[-1]
+        shortstartblock = shortpathoverlapnodess.sort_values("start").iloc[0]
+        shortendblock = shortpathoverlapnodess.sort_values("end").iloc[-1]
+        """get consensus for each block using graph.blocks[blockid].consensus()"""
+        longstartcons = graph.blocks[longstartblock["block_id"]].consensus()
+        longendcons = graph.blocks[longendblock["block_id"]].consensus()
+        shortstartcons = graph.blocks[shortstartblock["block_id"]].consensus()
+        shortendcons = graph.blocks[shortendblock["block_id"]].consensus()
+        """ get the sequences from outtargets[pathname+"_path_consensus"].seq"""
+        shortseq = outtargets[pathname+"_path_consensus"].seq
+        longseq = outtargets[longpathname+"_path_consensus"].seq
+        """ find the position of the start and end consensus in each sequence"""
+        shortoverlapstart = shortseq.find(shortstartcons)
+        shortoverlapend = shortseq.find(shortendcons)
+        shortlen = len(shortseq)
+        longoverlapstart = longseq.find(longstartcons)
+        longoverlapend = longseq.find(longendcons)
+        longlen = len(longseq)
+        """ calculate padding needed on left and right"""
+        padleft = longoverlapstart - shortoverlapstart
+        padright = (longlen - longoverlapend) - (shortlen - shortoverlapend)
+        if padleft < 0:
+            padleft = 0
+        if padright < 0:
+            padright = 0
+        newseq = padleft*"N"+shortseq+padright*"N"
+        newseqobj = SeqRecord.SeqRecord(Seq.Seq(newseq), id=pathname+"_path_consensus", description="")
+        padded.append(pathname)
+        outseqs.append(newseqobj)
+        # print(f"padded {pathname} from {shortlen} to {len(newseq)} with {padleft} left and {padright} right Ns based on {longpathname} of length {longlen}")
+
+    unchangedseqs = [outtargets[x] for x in outtargets if x.replace("_path_consensus","") not in shortpaths]
+    alloutseqs = unchangedseqs + outseqs
+    # SeqIO.write(alloutseqs, outpath.replace(".fa","_padded.fa").replace(".fasta","_padded.fasta"), "fasta")
+    return alloutseqs,padded
+
+
+def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=None):
+    pathidlist = [graph.paths.id_to_pos[x] for x in pathlist]
+    filt_nodedf = graph.nodes.df[graph.nodes.df["path_id"].isin(pathidlist)]
+    nodetoblock = dict(zip(filt_nodedf.index, filt_nodedf["block_id"]))
+    blockno = filt_nodedf["block_id"].nunique()
+
+    block_to_ignore = rm_N_blocks(graph, nthresh)
     # print(f"removed {len(block_to_ignore)} blocks for N proportion over {nthresh}")
     block_to_ignore = filter_short_terminal_blocks(graph,lenthresh,block_to_ignore,)
     chosen_paths,strain_to_added_block = greedy_cover(graph.nodes.df,block_to_ignore,colA="path_id", colB="block_id")
