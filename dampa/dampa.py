@@ -981,27 +981,38 @@ def subambig(probes,props):
         outprobes.append(probe)
     SeqIO.write(outprobes,probes,"fasta")
 
-def cleanup(args,filtgenomes=""):
+def cleanup(args,outlierrun=False):
     if args.keeptmp:
         logger.info("Keeping temporary files")
     else:
         logger.info("Cleaning up temporary files (use --keeptmp to keep pangenome graph and other temporary files)")
         outloc = f"{args.outputfolder}/{args.outputprefix}"
-        tormsuffixes = ["_pangenome.gfa",".json","_pangenome.fa",
+        tormsuffixes = ["_pangenome.fa",
                        "_probetools_final_long_stats_report.tsv","_probetools_final_summary_stats_report.tsv",
                        "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa","_pangenome_lin.fa"]
         for i in tormsuffixes:
             print(f"{outloc}{i}")
             if os.path.exists(f"{outloc}{i}"):
                 os.remove(f"{outloc}{i}")
-        if filtgenomes != "":
-            filtgenomesrm=glob.glob(f"{filtgenomes}*")
-            for i in filtgenomesrm:
-                os.remove(i)
-        mmseqsrm = glob.glob(f"{outloc}_alltypesdb*") + glob.glob(f"{outloc}_DB.*") + glob.glob(f"{outloc}_Dbreps*")
-        for i in mmseqsrm:
-            if os.path.exists(i):
-                os.remove(i)
+        probetoolstoremove = glob.glob(f"{outloc}_probetools_*")
+        for i in probetoolstoremove:
+            os.remove(i)
+        filtgenomes = outloc + "_filtered_input.fasta"
+        filtgenomesrm=glob.glob(f"{filtgenomes}.*") + glob.glob(f"{outloc}_cdhit_outlier.fasta.*") + glob.glob(f"{outloc}_cdhit_reps*")
+        for i in filtgenomesrm:
+            os.remove(i)
+
+        if outlierrun:
+            for i in tormsuffixes:
+                if os.path.exists(f"{outloc}_outliers{i}"):
+                    os.remove(f"{outloc}_outliers{i}")
+            if not os.path.exists(outloc+"_outliers"):
+                os.mkdir(outloc+"_outliers")
+            else:
+                shutil.rmtree(outloc+"_outliers")
+                os.mkdir(outloc+"_outliers")
+            for i in glob.glob(f"{outloc}*outlier*"):
+                shutil.move(i,outloc+"_outliers/")
     logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
 def mask_fasta(input_fasta, output_fasta, window=120, cutoff=1.6):
