@@ -1114,7 +1114,7 @@ def get_args():
 
     pangraphsettings.add_argument("--pangraphident", type=int, default=20,choices=[5,10,20],help="Pangenome percentage identity setting allowable values are 5,10 or 20")
     pangraphsettings.add_argument("--pangraphalpha", type=float, default=0,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
-    pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
+    pangraphsettings.add_argument("--pangraphbeta", type=float, default=6.666,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
     pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
     pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
     pangraphsettings.add_argument("--pangraphdepth", type=int, default=0,help="Minimum depth of a node to allow in pangenome graph. Nodes with depth below this will be removed from the graph. Set to 0 to not remove any nodes based on depth")
@@ -1122,7 +1122,7 @@ def get_args():
 
     probetoolssettings = design.add_argument_group("Probetools settings","Used to retrieve sequences that may be missed in the graph based design step")
 
-    probetoolssettings.add_argument("--probetoolsidentity", type=int, default=85,
+    probetoolssettings.add_argument("--probetoolsidentity", type=int, default=80,
                                     help="Minimum identity in probe match to target to call probe binding")
     probetoolssettings.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
     probetoolssettings.add_argument("--probetools0covnmin", type=int, default=20,
@@ -1132,7 +1132,7 @@ def get_args():
 
     preclustersettings = design.add_argument_group("cdhit preclustering settings",'This step reduces redundancy in input genomes to speed up pangraph')
     preclustersettings.add_argument("--clustering_inputno_trigger",
-                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9 percent identity\n Set to 0 to always cluster",type=int,
+                                  help="if number of input sequences exceeds this number then cdhit will be used to deduplcate genomes above 99.9 percent identity\n Set to 0 to always cluster",type=int,
                                   default=5000)
     preclustersettings.add_argument("--clusterident", type=float, default=0.999,
                                     help="Minimum identity to cluster genomes")
