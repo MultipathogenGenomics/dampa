@@ -24,46 +24,7 @@ from dampa.tools.gather_probe_depth_stats import make_stats, make_propsplot, pro
 from dampa.tools.cdhit_rep_noN import longest_or_fewest_ns_representatives
 from dampa import __version__ as dampaversion
 from dampa.tools.generate_targets import generate_targets,softmask_low_complexity,shannon_entropy
-
-def mmseqs_subset(args,filtinput):
-    """
-    run the following commands
-    mmseqs createdb ingenomes.fasta alltypesdb
-
-    mmseqs cluster alltypesdb $pref""DB tmp --min-seq-id clusterident -c clustercov
-
-    mmseqs createtsv alltypesdb $pref""DB $pref""cluster.tsv
-
-    mmseqs createsubdb $pref""DB alltypesdb $pref""Dbreps
-
-    mmseqs convert2fasta $pref""DBreps $pref""DB.fasta
-
-    """
-    outloc = f"{args.outputfolder}/{args.outputprefix}"
-    mmseqs_log = open(outloc + "_mmseqs.log", "w")
-
-    cmd = f"mmseqs createdb {filtinput} {outloc}_alltypesdb"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.clusterident} -c {args.clustercov} --cov-mode 1"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    # cmd = f"mmseqs createtsv {outloc}_alltypesdb {outloc}_DB {outloc}_cluster.tsv"
-    # subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    cmd = f"mmseqs createsubdb  {outloc}_DB {outloc}_alltypesdb {outloc}_Dbreps"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    mmseqsreps = f"{outloc}_reps.fasta"
-    cmd = f"mmseqs convert2fasta {outloc}_Dbreps {mmseqsreps}"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-
-    if os.path.exists(mmseqsreps):
-        logger.info(f"Mmseqs ran successfully")
-        if not args.keeplogs:
-            os.remove(outloc + "_mmseqs.log")
-        return mmseqsreps
-    else:
-        logger.error(f"mmseqs output file {mmseqsreps} not present. Check for error in capture log.")
-
-
-    return mmseqsreps
+from dampa.tools.union_coverage import union_coverage
 
 
 def cdhit_subset(args,filtinput):
