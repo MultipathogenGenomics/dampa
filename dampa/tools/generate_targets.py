@@ -289,7 +289,49 @@ def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=Non
         maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)#TODO parameterize
         targetseqs.append(maskedseq)
     # print(f"writing {len(targetseqs)} outputs")
-    SeqIO.write(targetseqs, outfile, "fasta")
+
+    return paddedseqs
+
+def multi_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=None):
+    """
+    For each component
+        for each block
+            if block is single species
+                store consensus as target blockid_species
+            else
+                get sequences for each species
+                    graph.blocks
+                get consensus for each species
+                save N sequences for the block if it has N species
+
+    """
+
+    component_nodes = graph.nodes.df[graph.nodes.df["path_name"].isin(pathlist)]
+    unique_species_blocks = component_nodes.groupby('block_id')['path_species'].unique()
+    block_to_species = unique_species_blocks.to_dict()
+    # single_species_blocks = unique_species_blocks[unique_species_blocks.apply(len) == 1].index.tolist()
+    outseq = []
+    for blockid in block_to_species:
+        speciesls = block_to_species[blockid]
+        if len(speciesls) == 1:
+            blockconsensus = graph.blocks[blockid].consensus()
+            species = block_to_species[blockid]
+            blockseq = SeqRecord.SeqRecord(Seq.Seq(blockconsensus),id=f"{blockid}-{species[0]}-single",name="",description="multispecies_component")
+            outseq.append(blockseq)
+        elif len(speciesls) > 1:
+            blockalign = graph.blocks[blockid].to_biopython_alignment()
+            for species in speciesls:
+                speciesnodes = component_nodes[(component_nodes["block_id"]==blockid)&(component_nodes["path_species"]==species)].index.to_list()
+                subset_records = [record for record in blockalign if record.id in speciesnodes]
+                subset_alignment = MultipleSeqAlignment(subset_records)
+                m = motifs.create([rec.seq for rec in subset_alignment])  # build Motif from the sequences
+                consensus = m.consensus
+                blockseq = SeqRecord.SeqRecord(Seq.Seq(consensus),id=f"{blockid}-{species}-multi",name="",description="multispecies_component")
+                outseq.append(blockseq)
+
+    outseq = [softmask_low_complexity(x, window=120, cutoff=1.6) for x in outseq]
+    return outseq
+
 
     original, final,removed, nfilt = union_coverage(outfile,outfile,min_ident=99.0,min_covered_frac=0.99,non_n_stretch=90)#TODO parameterize
     if logger:
