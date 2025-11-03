@@ -7,6 +7,7 @@ from collections import defaultdict
 from multiprocessing import Pool
 import subprocess
 import argparse
+import json
 import os
 import logging
 import time
@@ -325,7 +326,7 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
     outpath = outloc+"_filtered_input.fasta"
     SeqIO.write(masked_genomes, outpath, "fasta")
     logger.info(f"total genomes with trailing polyA >5bp trimmed: {notrimmed}")
-    logger.info(f"total genomes excluded for due to excess non ATGCN nucleotides: {excluded}")
+    logger.info(f"total genomes excluded due to excess non ATGCN nucleotides: {excluded}")
     logger.info(f"See *_filtered_genomes.tsv file for details")
     return outpath,overallprops,included,filtered,descriptions
 
@@ -556,6 +557,8 @@ def run_pangraph(args,filtinput,outloc):
         else:
             lowdepthnodes = []
         merged_seqs = linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",lowdepthnodes)# Remove the log file if not keeping logs
+        if len(merged_seqs) == 0:
+            return False
         merged_masked_seqs = [softmask_low_complexity(x,args.probelen,args.shannonthresh) for x in merged_seqs]
         SeqIO.write(merged_masked_seqs, f"{outloc}_pangenome_lin.fa", "fasta")
 
@@ -572,7 +575,7 @@ def run_pangraph(args,filtinput,outloc):
         logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
-    return
+    return True
 
 def shannon_filter(seqrecords,threshold):
     """
@@ -867,7 +870,7 @@ def setup_logging():
     handler.setFormatter(formatter)
 
     logger = logging.getLogger("runtime_logger")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     logger.propagate = False
     return logger
@@ -961,7 +964,6 @@ def cleanup(args,outlierrun=False):
                        "_probetools_final_long_stats_report.tsv","_probetools_final_summary_stats_report.tsv",
                        "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa","_pangenome_lin.fa"]
         for i in tormsuffixes:
-            print(f"{outloc}{i}")
             if os.path.exists(f"{outloc}{i}"):
                 os.remove(f"{outloc}{i}")
         probetoolstoremove = glob.glob(f"{outloc}_probetools_*")
@@ -1010,13 +1012,13 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
     pangenomefasta = outloc + "_pangenome_lin.fa"
     pangenome_graph_json = outloc + ".json"
     targets = outloc + "_targets.fasta"
-    run_pangraph(args,
+    success = run_pangraph(args,
                  filtered_input,outloc)
-
-
+    if not success:
+        return 0
     split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig,args.shannonthresh, probeprefix)
     targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
-    logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
+    logger.info(f"Generated {lentargets} target pseudogenomes to cover pangenome graph")
     if not args.skip_padding:
         make_padded_probes(pangenomefasta, probename, args.minlenforpadding, probeprefix=probeprefix)
     if not args.skip_probetoolsfinal:
@@ -1032,10 +1034,7 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
         if not args.skip_summaries:
             finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input,args.input)
             make_summaries(args, finalcaptureout, totalprobes,outloc)
-    if rminp:
-        cleanup(args, filtered_input)
-    else:
-        cleanup(args)
+
 
     return totalprobes
 
