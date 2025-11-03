@@ -17,9 +17,13 @@ When designing a probeset for targeted metagenomics, the optimal solution includ
 
 ### conda
 
+conda will install all dependencies for you
+
 `conda install -c bioconda -c conda-forge dampa`
 
 ### pip (must have python/pip installed)
+
+using pip you must install blast and vsearch yourself
 
 `git clone https://github.com/MultipathogenGenomics/dampa.git`
 
