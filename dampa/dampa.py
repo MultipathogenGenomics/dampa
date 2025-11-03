@@ -1290,6 +1290,32 @@ def get_args():
     additionaleval.add_argument("--keeptmp",
                         help="keep intermediate files from pangraph and probetools",action='store_true')
 
+    targets = subparsers.add_parser("targets", help="generate targets fasta file from previous dampa run json pangenome graph file (to generate targets from input genomes use dampa design)",
+                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    generaltargets = targets.add_argument_group("General settings")
+
+    generaltargets.add_argument("-j", "--inputjson", required=True,
+                                help="path to dampa design json arguments file",type=File)
+    generaltargets.add_argument("-o", "--outputfolder", type=Dir,
+                        help="path to output folder",default=f"{cwd}/")
+    generaltargets.add_argument("-p", "--outputprefix", default="probebench_run",
+                        help="prefix for all output files and folders")
+    generaltargets.add_argument("-l", "--probelen", type=int, default=120,help="length of output probes")
+    generaltargets.add_argument("--nthresh", type=float, default=0.1,
+                                help="proportion of Ns allowed in any given graph node to be included in targets")
+    generaltargets.add_argument("--keeplogs",
+                        help="keep logs containing output from pangraph and probetools",action='store_true')
+    generaltargets.add_argument("-t","--threads",
+                                help="number of threads",
+                                type=int,
+                                default=1)
+
+
+
+
+
+
     args = parser.parse_args()
 
     return args
@@ -1348,6 +1374,14 @@ def main():
             logger.info(f"dampa design finished. Total probes: {totalprobes}")
 
         write_filtered_genomes(filtered, outloc,descriptions)
+        cleanup(args, outlierrun=args.remove_outliers)
+
+    elif args.command == "targets":
+        logger.info("Running dampa targets")
+        pangenome_graph_json = args.inputjson
+        targets = outloc + "_targets.fasta"
+        targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
+        logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
     elif args.command == "eval":
         if args.version:
             print(f"version {dampaversion}")
