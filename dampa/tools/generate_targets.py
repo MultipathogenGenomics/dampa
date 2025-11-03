@@ -333,10 +333,63 @@ def multi_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=None
     return outseq
 
 
-    original, final,removed, nfilt = union_coverage(outfile,outfile,min_ident=99.0,min_covered_frac=0.99,non_n_stretch=90)#TODO parameterize
-    if logger:
-        logger.info(f"Reduced target number: Original: {original}, Kept: {final}, Removed: {removed}, N-filtered: {nfilt}")
-    return outfile,final
+def add_species_to_nodedf(graph):
+    graph.nodes.df["path_name"] = graph.nodes.df["path_id"].apply(lambda x: graph.paths.idx_to_name[x])
+    graph.nodes.df["path_species"] = graph.nodes.df["path_name"].apply(lambda x: str(x).split("_")[0])
+
+
+def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
+    graph = pp.Pangraph.from_json(injson)
+
+    # components = recursive_findcomponent(graph)
+    components = non_recursive_findcomponent(graph)
+    component_species = find_species(components) # TODO separate species definition table when added to castanet
+    add_species_to_nodedf(graph)
+
+    """ 
+    1 - Identify mixed species components
+    2 - for single species components continue as normal
+    3 - for mixed species components
+        single species blocks use consensus
+        multispecies blocks
+        get consensus for each species
+        save as blockid_species
+        in castanet counts will be collapsed to blockid but initial consensus gen will generate seq for both species - allows matching
+    """
+    speciescount = {}
+    mixedcount = 1
+    outtargets = []
+    for component in components:
+        pathlist = components[component]
+        species = list(component_species[component])
+        if len(species) == 1:
+            s = species[0]
+            if s not in speciescount:
+                speciescount[s] = 1
+            else:
+                speciescount[s] += 1
+            paddedseqs = single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=logger)
+            if not paddedseqs:
+                if logger:
+                    logger.warning(f"No targets generated for component {component} species {s} all nodes may have been filtered out.")
+                continue
+            for sequence in paddedseqs:
+                sequence.id = f"{s}-component{component}-{sequence.id}"
+                sequence.description = f"singlespecies_component"
+            outtargets.extend(paddedseqs)
+            if logger:
+                logger.debug(
+                    f"target number for component {component} species {s} : {len(paddedseqs)}")
+        else:
+            blockseqs = multi_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,logger=logger)
+            outtargets.extend(blockseqs)
+            if logger:
+                logger.debug(
+                    f"target number for component {component} species mixed: {len(blockseqs)} in {len(species)}")
+            mixedcount+=1
+    SeqIO.write(outtargets, outfile, "fasta")
+
+    return outfile,len(outtargets)
 
 def main():
     args = get_args()
