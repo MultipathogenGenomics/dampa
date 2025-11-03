@@ -7,6 +7,7 @@ from collections import defaultdict
 from multiprocessing import Pool
 import subprocess
 import argparse
+import json
 import os
 import logging
 import time
@@ -24,46 +25,7 @@ from dampa.tools.gather_probe_depth_stats import make_stats, make_propsplot, pro
 from dampa.tools.cdhit_rep_noN import longest_or_fewest_ns_representatives
 from dampa import __version__ as dampaversion
 from dampa.tools.generate_targets import generate_targets,softmask_low_complexity,shannon_entropy
-
-def mmseqs_subset(args,filtinput):
-    """
-    run the following commands
-    mmseqs createdb ingenomes.fasta alltypesdb
-
-    mmseqs cluster alltypesdb $pref""DB tmp --min-seq-id clusterident -c clustercov
-
-    mmseqs createtsv alltypesdb $pref""DB $pref""cluster.tsv
-
-    mmseqs createsubdb $pref""DB alltypesdb $pref""Dbreps
-
-    mmseqs convert2fasta $pref""DBreps $pref""DB.fasta
-
-    """
-    outloc = f"{args.outputfolder}/{args.outputprefix}"
-    mmseqs_log = open(outloc + "_mmseqs.log", "w")
-
-    cmd = f"mmseqs createdb {filtinput} {outloc}_alltypesdb"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    cmd = f"mmseqs cluster {outloc}_alltypesdb {outloc}_DB tmp --min-seq-id {args.clusterident} -c {args.clustercov} --cov-mode 1"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    # cmd = f"mmseqs createtsv {outloc}_alltypesdb {outloc}_DB {outloc}_cluster.tsv"
-    # subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    cmd = f"mmseqs createsubdb  {outloc}_DB {outloc}_alltypesdb {outloc}_Dbreps"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-    mmseqsreps = f"{outloc}_reps.fasta"
-    cmd = f"mmseqs convert2fasta {outloc}_Dbreps {mmseqsreps}"
-    subprocess.run(cmd, shell=True, stdout=mmseqs_log, stderr=mmseqs_log)
-
-    if os.path.exists(mmseqsreps):
-        logger.info(f"Mmseqs ran successfully")
-        if not args.keeplogs:
-            os.remove(outloc + "_mmseqs.log")
-        return mmseqsreps
-    else:
-        logger.error(f"mmseqs output file {mmseqsreps} not present. Check for error in capture log.")
-
-
-    return mmseqsreps
+from dampa.tools.union_coverage import union_coverage
 
 
 def cdhit_subset(args,filtinput):
@@ -364,7 +326,7 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
     outpath = outloc+"_filtered_input.fasta"
     SeqIO.write(masked_genomes, outpath, "fasta")
     logger.info(f"total genomes with trailing polyA >5bp trimmed: {notrimmed}")
-    logger.info(f"total genomes excluded for due to excess non ATGCN nucleotides: {excluded}")
+    logger.info(f"total genomes excluded due to excess non ATGCN nucleotides: {excluded}")
     logger.info(f"See *_filtered_genomes.tsv file for details")
     return outpath,overallprops,included,filtered,descriptions
 
@@ -595,14 +557,25 @@ def run_pangraph(args,filtinput,outloc):
         else:
             lowdepthnodes = []
         merged_seqs = linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",lowdepthnodes)# Remove the log file if not keeping logs
+        if len(merged_seqs) == 0:
+            return False
         merged_masked_seqs = [softmask_low_complexity(x,args.probelen,args.shannonthresh) for x in merged_seqs]
         SeqIO.write(merged_masked_seqs, f"{outloc}_pangenome_lin.fa", "fasta")
+
+        if args.unioncov:
+            shutil.copyfile(f"{outloc}_pangenome_lin.fa",f"{outloc}_pangenome_lin_orig.fa")
+            inseq = SeqIO.parse(f"{outloc}_pangenome_lin.fa", "fasta")
+            original,final,removed,nfilt, kept, keep = union_coverage(inseq,f"{outloc}_pangenome_lin.fa")
+            if len(keep) == 0:
+                return False
+            logger.info(
+                f"Reduced pangenome node number: Original: {original}, Kept: {final}, Removed: {removed}, N-filtered: {nfilt}")
         # terminal_node_additional_clustering()
 
         logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
-    return
+    return True
 
 def shannon_filter(seqrecords,threshold):
     """
@@ -897,7 +870,7 @@ def setup_logging():
     handler.setFormatter(formatter)
 
     logger = logging.getLogger("runtime_logger")
-    logger.setLevel(logging.DEBUG)
+    logger.setLevel(logging.INFO)
     logger.addHandler(handler)
     logger.propagate = False
     return logger
@@ -981,27 +954,37 @@ def subambig(probes,props):
         outprobes.append(probe)
     SeqIO.write(outprobes,probes,"fasta")
 
-def cleanup(args,filtgenomes=""):
+def cleanup(args,outlierrun=False):
     if args.keeptmp:
         logger.info("Keeping temporary files")
     else:
         logger.info("Cleaning up temporary files (use --keeptmp to keep pangenome graph and other temporary files)")
         outloc = f"{args.outputfolder}/{args.outputprefix}"
-        tormsuffixes = ["_pangenome.gfa",".json","_pangenome.fa",
+        tormsuffixes = ["_pangenome.fa",
                        "_probetools_final_long_stats_report.tsv","_probetools_final_summary_stats_report.tsv",
                        "_probetools_final_capture.pt","_probetools_final_low_cov_seqs.fa","_pangenome_lin.fa"]
         for i in tormsuffixes:
-            print(f"{outloc}{i}")
             if os.path.exists(f"{outloc}{i}"):
                 os.remove(f"{outloc}{i}")
-        if filtgenomes != "":
-            filtgenomesrm=glob.glob(f"{filtgenomes}*")
-            for i in filtgenomesrm:
-                os.remove(i)
-        mmseqsrm = glob.glob(f"{outloc}_alltypesdb*") + glob.glob(f"{outloc}_DB.*") + glob.glob(f"{outloc}_Dbreps*")
-        for i in mmseqsrm:
-            if os.path.exists(i):
-                os.remove(i)
+        probetoolstoremove = glob.glob(f"{outloc}_probetools_*")
+        for i in probetoolstoremove:
+            os.remove(i)
+        filtgenomes = outloc + "_filtered_input.fasta"
+        filtgenomesrm=glob.glob(f"{filtgenomes}.*") + glob.glob(f"{outloc}_cdhit_outlier.fasta.*") + glob.glob(f"{outloc}_cdhit_reps*")
+        for i in filtgenomesrm:
+            os.remove(i)
+
+        if outlierrun:
+            for i in tormsuffixes:
+                if os.path.exists(f"{outloc}_outliers{i}"):
+                    os.remove(f"{outloc}_outliers{i}")
+            if not os.path.exists(outloc+"_outliers"):
+                os.mkdir(outloc+"_outliers")
+            else:
+                shutil.rmtree(outloc+"_outliers")
+                os.mkdir(outloc+"_outliers")
+            for i in glob.glob(f"{outloc}*outlier*"):
+                shutil.move(i,outloc+"_outliers/")
     logger.info(f"Cleaned up tmp files in {args.outputprefix}")
 
 def mask_fasta(input_fasta, output_fasta, window=120, cutoff=1.6):
@@ -1029,13 +1012,13 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
     pangenomefasta = outloc + "_pangenome_lin.fa"
     pangenome_graph_json = outloc + ".json"
     targets = outloc + "_targets.fasta"
-    run_pangraph(args,
+    success = run_pangraph(args,
                  filtered_input,outloc)
-
-
+    if not success:
+        return 0
     split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig,args.shannonthresh, probeprefix)
-    targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets)
-    logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
+    targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
+    logger.info(f"Generated {lentargets} target pseudogenomes to cover pangenome graph")
     if not args.skip_padding:
         make_padded_probes(pangenomefasta, probename, args.minlenforpadding, probeprefix=probeprefix)
     if not args.skip_probetoolsfinal:
@@ -1051,10 +1034,7 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
         if not args.skip_summaries:
             finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input,args.input)
             make_summaries(args, finalcaptureout, totalprobes,outloc)
-    if rminp:
-        cleanup(args, filtered_input)
-    else:
-        cleanup(args)
+
 
     return totalprobes
 
@@ -1134,7 +1114,7 @@ def get_args():
 
     pangraphsettings.add_argument("--pangraphident", type=int, default=20,choices=[5,10,20],help="Pangenome percentage identity setting allowable values are 5,10 or 20")
     pangraphsettings.add_argument("--pangraphalpha", type=float, default=0,help="Energy cost for splitting a block during alignment merger. Controls graph fragmentation")
-    pangraphsettings.add_argument("--pangraphbeta", type=float, default=10,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
+    pangraphsettings.add_argument("--pangraphbeta", type=float, default=6.666,help="Energy cost for diversity in the alignment. A high value prevents merging of distantly-related sequences in the same block")
     pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
     pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
     pangraphsettings.add_argument("--pangraphdepth", type=int, default=0,help="Minimum depth of a node to allow in pangenome graph. Nodes with depth below this will be removed from the graph. Set to 0 to not remove any nodes based on depth")
@@ -1142,7 +1122,7 @@ def get_args():
 
     probetoolssettings = design.add_argument_group("Probetools settings","Used to retrieve sequences that may be missed in the graph based design step")
 
-    probetoolssettings.add_argument("--probetoolsidentity", type=int, default=85,
+    probetoolssettings.add_argument("--probetoolsidentity", type=int, default=80,
                                     help="Minimum identity in probe match to target to call probe binding")
     probetoolssettings.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
     probetoolssettings.add_argument("--probetools0covnmin", type=int, default=20,
@@ -1152,7 +1132,7 @@ def get_args():
 
     preclustersettings = design.add_argument_group("cdhit preclustering settings",'This step reduces redundancy in input genomes to speed up pangraph')
     preclustersettings.add_argument("--clustering_inputno_trigger",
-                                  help="if number of input sequences exceeds this number then mmseqs will be used to deduplcate genomes above 99.9 percent identity\n Set to 0 to always cluster",type=int,
+                                  help="if number of input sequences exceeds this number then cdhit will be used to deduplcate genomes above 99.9 percent identity\n Set to 0 to always cluster",type=int,
                                   default=5000)
     preclustersettings.add_argument("--clusterident", type=float, default=0.999,
                                     help="Minimum identity to cluster genomes")
@@ -1184,6 +1164,8 @@ def get_args():
                         default='90')
     additionalsettings.add_argument("--skip_probetoolsfinal",
                         help="do NOT run final probe design step. i.e. this step uses probetools to design probes to regions that are not represented in the pangenome",action='store_true')
+    additionalsettings.add_argument("--unioncov",
+                        help="minimise pangenome graph size by removing nodes represented elsewhere in sections",action='store_true')
 
 
     additionalsettings.add_argument("-t","--threads",
@@ -1268,9 +1250,75 @@ def get_args():
     additionaleval.add_argument("--keeptmp",
                         help="keep intermediate files from pangraph and probetools",action='store_true')
 
+    targets = subparsers.add_parser("targets", help="generate targets fasta file from previous dampa run json pangenome graph file (to generate targets from input genomes use dampa design)",
+                                   formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+
+    generaltargets = targets.add_argument_group("General settings")
+
+    generaltargets.add_argument("-j", "--inputjson", required=True,
+                                help="path to dampa design json arguments file",type=File)
+    generaltargets.add_argument("-o", "--outputfolder", type=Dir,
+                        help="path to output folder",default=f"{cwd}/")
+    generaltargets.add_argument("-p", "--outputprefix", default="probebench_run",
+                        help="prefix for all output files and folders")
+    generaltargets.add_argument("-l", "--probelen", type=int, default=120,help="length of output probes")
+    generaltargets.add_argument("--nthresh", type=float, default=0.1,
+                                help="proportion of Ns allowed in any given graph node to be included in targets")
+    generaltargets.add_argument("--keeplogs",
+                        help="keep logs containing output from pangraph and probetools",action='store_true')
+    generaltargets.add_argument("-t","--threads",
+                                help="number of threads",
+                                type=int,
+                                default=1)
+
+
+
+
+
+
     args = parser.parse_args()
 
-    return args
+    return args,parser
+
+def reconstruct_arg(args, parser):
+    cmd = ["python", sys.argv[0]]
+
+    # Determine if subparser was used
+    subparser_action = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None
+    )
+
+    subcommand = getattr(args, subparser_action.dest, None) if subparser_action else None
+    if subcommand:
+        cmd.append(subcommand)
+        # Get the specific subparser
+        subparser = subparser_action.choices[subcommand]
+    else:
+        subparser = None
+
+    # Function to add args (works for main and subparser)
+    def add_args_from_parser(p, ns):
+        for action in p._actions:
+            if action.dest in ("help", subparser_action.dest if subparser_action else None):
+                continue
+            value = getattr(ns, action.dest, None)
+            # Include boolean flags if True
+            if isinstance(value, bool):
+                if value:
+                    cmd.append(f"--{action.dest}")
+            # Include non-default arguments
+            elif value != action.default:
+                cmd.extend([f"--{action.dest}", str(value)])
+
+    # Add main parser args
+    add_args_from_parser(parser, args)
+
+    # Add subparser args if any
+    if subparser:
+        add_args_from_parser(subparser, args)
+
+    return cmd
 
 def main():
     """
@@ -1283,8 +1331,18 @@ def main():
     logger = setup_logging()
     logger.info("Starting")
 
-    args = get_args()
+    args,parser = get_args()
     outloc = f"{args.outputfolder}/{args.outputprefix}"
+
+
+    outargsjson = outloc + "_arguments.json"
+
+    with open(outargsjson, "w") as f:
+        json.dump(vars(args), f, indent=4)
+
+    cmd = reconstruct_arg(args, parser)
+    cmdstr = " ".join(cmd)
+    logger.info(f"Command run: {cmdstr}")
 
     if args.command == "design":
         if args.version:
@@ -1326,6 +1384,14 @@ def main():
             logger.info(f"dampa design finished. Total probes: {totalprobes}")
 
         write_filtered_genomes(filtered, outloc,descriptions)
+        cleanup(args, outlierrun=args.remove_outliers)
+
+    elif args.command == "targets":
+        logger.info("Running dampa targets")
+        pangenome_graph_json = args.inputjson
+        targets = outloc + "_targets.fasta"
+        targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
+        logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
     elif args.command == "eval":
         if args.version:
             print(f"version {dampaversion}")

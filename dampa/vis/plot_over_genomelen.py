@@ -124,3 +124,4 @@ def make_genome_plots(capdata, pref):
         #     print(f"p2{c}")
     plt.axhline(y=1, color='black', linestyle='--',zorder=0,alpha=0.3)
     plt.savefig(f"{pref}_genomecov_lennorm.pdf")
+    plt.close()
