@@ -1278,7 +1278,47 @@ def get_args():
 
     args = parser.parse_args()
 
-    return args
+    return args,parser
+
+def reconstruct_arg(args, parser):
+    cmd = ["python", sys.argv[0]]
+
+    # Determine if subparser was used
+    subparser_action = next(
+        (a for a in parser._actions if isinstance(a, argparse._SubParsersAction)),
+        None
+    )
+
+    subcommand = getattr(args, subparser_action.dest, None) if subparser_action else None
+    if subcommand:
+        cmd.append(subcommand)
+        # Get the specific subparser
+        subparser = subparser_action.choices[subcommand]
+    else:
+        subparser = None
+
+    # Function to add args (works for main and subparser)
+    def add_args_from_parser(p, ns):
+        for action in p._actions:
+            if action.dest in ("help", subparser_action.dest if subparser_action else None):
+                continue
+            value = getattr(ns, action.dest, None)
+            # Include boolean flags if True
+            if isinstance(value, bool):
+                if value:
+                    cmd.append(f"--{action.dest}")
+            # Include non-default arguments
+            elif value != action.default:
+                cmd.extend([f"--{action.dest}", str(value)])
+
+    # Add main parser args
+    add_args_from_parser(parser, args)
+
+    # Add subparser args if any
+    if subparser:
+        add_args_from_parser(subparser, args)
+
+    return cmd
 
 def main():
     """
@@ -1291,8 +1331,18 @@ def main():
     logger = setup_logging()
     logger.info("Starting")
 
-    args = get_args()
+    args,parser = get_args()
     outloc = f"{args.outputfolder}/{args.outputprefix}"
+
+
+    outargsjson = outloc + "_arguments.json"
+
+    with open(outargsjson, "w") as f:
+        json.dump(vars(args), f, indent=4)
+
+    cmd = reconstruct_arg(args, parser)
+    cmdstr = " ".join(cmd)
+    logger.info(f"Command run: {cmdstr}")
 
     if args.command == "design":
         if args.version:
