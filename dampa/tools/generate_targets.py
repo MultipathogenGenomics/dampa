@@ -3,6 +3,51 @@ from Bio import SeqIO,SeqRecord,Seq
 import math
 from collections import Counter
 from dampa.tools.union_coverage import union_coverage
+import statistics as stats
+from Bio.Align import MultipleSeqAlignment,AlignInfo
+
+
+
+def non_recursive_findcomponent(pangraph, newpaths=None, searched=None, components=None, c=0):
+    if searched is None:
+        searched = set()
+        newpaths = []
+        components = {}
+
+    while True:
+        if len(newpaths) == 0:
+            allcomponents = [item for sublist in components.values() for item in sublist]
+            remainingpaths = set(pangraph.paths.ids).difference(allcomponents)
+            if len(remainingpaths) == 0:
+                return components
+            else:
+                if c > 0:
+                    pass  # print(f"component {c} done, {len(components[c])} paths, {len(remainingpaths)} paths remaining")
+                c += 1
+                searched = set()
+                searchls = [remainingpaths.pop()]
+                pathids = [pangraph.paths.id_to_pos[x] for x in searchls]
+                ppnodedf = pangraph.nodes.df
+                pathblocks = ppnodedf.loc[ppnodedf["path_id"].isin(pathids), "block_id"]
+                linkedpaths = set(ppnodedf.loc[ppnodedf["block_id"].isin(
+                    pathblocks), "path_id"].unique().tolist())
+                pathnames = set([pangraph.paths.idx_to_name[x] for x in linkedpaths])
+                newpaths = list(pathnames.difference(searched))
+                continue
+        else:
+            searched.update(newpaths)
+            if c not in components:
+                components[c] = newpaths
+            else:
+                components[c].extend(newpaths)
+            pathids = [pangraph.paths.id_to_pos[x] for x in newpaths]
+            ppnodedf = pangraph.nodes.df
+            pathblocks = ppnodedf.loc[ppnodedf["path_id"].isin(pathids), "block_id"]
+            linkedpaths = set(ppnodedf.loc[ppnodedf["block_id"].isin(
+                pathblocks), "path_id"].unique().tolist())
+            pathnames = set([pangraph.paths.idx_to_name[x] for x in linkedpaths])
+            newpaths = list(pathnames.difference(searched))
+            continue
 
 
 def shannon_entropy(seq: str) -> float:
