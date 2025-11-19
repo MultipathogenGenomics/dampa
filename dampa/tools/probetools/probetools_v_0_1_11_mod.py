@@ -27,7 +27,7 @@ def main():
     elif module == 'capture':
         print(f'\nProbeTools Capture v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
-        capture(out_path, name, args['-t'], args['-p'], args['-i'], args['-l'], args['-T'],args["-y"])
+        capture(out_path, name, args['-t'], args['-p'], args['-i'], args['-l'], args['-T'],args["-y"], args['-L'])
     elif module == 'getlowcov':
         print(f'\nProbeTools GetLowCov v{version}')
         print('https://github.com/KevinKuchinski/ProbeTools\n')
@@ -81,10 +81,10 @@ def parse_args(args, version):
         default_arg_values = {'-k': 120, '-s': 1, '-d': 0, '-i': 90, '-p': None, '-n': 'MAX', '-T': 0}
     elif module == 'capture':
         required_args = {'-t', '-p', '-o'}
-        arg_value_types = {'-t': str, '-p': str, '-o':str, '-i': float, '-l': int, '-T': int, '-y': str}
-        min_arg_values = {'-i': 50, '-l': 1, '-T': 1}
+        arg_value_types = {'-t': str, '-p': str, '-o':str, '-i': float, '-l': int, '-T': int, '-y': str, '-L': int}
+        min_arg_values = {'-i': 50, '-l': 1, '-T': 1, '-L': 1}
         max_arg_values = {'-i': 100}
-        default_arg_values = {'-i': 90, '-l': 60, '-T': 1}
+        default_arg_values = {'-i': 90, '-l': 60, '-T': 1, '-L': 40}
     elif module == 'getlowcov':
         required_args = {'-i', '-o'}
         arg_value_types = {'-i': str, '-o': str, '-k': int, '-D': int, '-L': int}
@@ -213,6 +213,7 @@ def print_usage(module, version):
         print('Optional arguments:')
         print(' -i : nucleotide sequence identity (%) threshold used for probe-target alignments (default=90, min=50, max=100)')
         print(' -l : minimum length for probe-target alignments (default=60, min=1)')
+        print(' -L : minimum number of consecutive bases below probe depth threshold to define a low coverage sub-sequence (default=40, min=1)')
         print(' -T : number of threads used by BLASTn for aligning probes to targets (default=1, min=1)\n')
         print(' -y : run dusting on blast results (default Y)\n')
     elif module == 'getlowcov':
@@ -347,16 +348,38 @@ def cluster_kmers(out_path, name, targets_path, k, cluster_id, step, max_degen, 
     return potential_probes, probes_writen
 
 
-def capture(out_path, name, targets_path, probes_path, min_id, min_length, threads,rundust):
+def capture(out_path, name, targets_path, probes_path, min_id, min_length, threads,rundust,min_low_cov_length):
     check_input([targets_path, probes_path])
     blast_path = os.path.join(out_path, name + '_blast_results.tsv')
     align_probes_to_targets_with_BLAST(targets_path, probes_path, blast_path, threads,rundust)
     # capture_data = create_empty_capture_data(targets_path)
     capture_data = create_empty_capture_data_w_soft_mask(targets_path)
     capture_data = add_BLAST_results_to_capture_data(blast_path, capture_data, min_id, min_length)
+    # add function to convert runs of 0 coverage shorter than min_low_cov_length to 1
+    capture_data = add_low_cov_length_to_capture_data(capture_data, min_low_cov_length)
     capture_path = os.path.join(out_path, name + '_capture.pt')
     write_capture_data(capture_path, capture_data)
 
+def add_low_cov_length_to_capture_data(capture_data, min_low_cov_length):
+    for target_id in capture_data.keys():
+        covlist = capture_data[target_id][1]
+        #covlist is a list of coverage values for each base in the target sequence
+        length = len(covlist)
+        i = 0
+        while i < length:
+            if covlist[i] == 0:
+                start = i
+                while i < length and covlist[i] == 0:
+                    i += 1
+                end = i
+                run_length = end - start
+                if run_length < min_low_cov_length:
+                    for j in range(start, end):
+                        covlist[j] = 1
+            else:
+                i += 1
+        capture_data[target_id][1] = covlist
+    return capture_data
 
 def get_low_cov(out_path, name, capture_path, k, min_depth, min_length):
     check_input([capture_path])
