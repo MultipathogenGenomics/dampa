@@ -4,6 +4,15 @@ Dampa: Diversity Aware Metagenomic Panel Assignment
 Targeted metagenomics is an approach that uses sets of oligonucleotide probes (up to 100,000s) to selectively sequence targeted loci or complete genomes from hundreds of pathogen species, removing the need to identify or isolate the pathogen first.
 When designing a probeset for targeted metagenomics, the optimal solution includes the minimum number of probes required to effectively enrich the desired set of target organisms or loci. DAMPA (Diversity Aware Metagenomic Panel Assignment), is a user-friendly probeset design pipeline that combines novel target selection algorithms with existing probe design tools to minimise probe number while maintaining unbiased coverage of target genomes. The key approach used by DAMPA is the generation of a pangenome graph to describe the diversity of targeted loci. A pangenome graph is a representation of all unique sequences in a species, or in this case, a dataset. Crucially, conserved regions are collapsed while diverse regions are separated. The graph therefore presents the ideal target for probe design as it will ensure that probes have sufficient identity to bind to all genomic regions regardless of their diversity and natively incorporates support for recombination. DAMPA applies existing probe design tools to the graph to design probes while also ensuring all regions of input genomes are covered.
 
+The core design pipeline:
+ - input genome filtering
+ - pangraph to generate graph
+ - linear chains of graph nodes merged
+ - consensus of each node in graph shredded to generate 120bp probes
+ - refine probe set relative to input genomes with probetools
+ - generate summary plots and statistics
+
+
 ## Dependencies
 - python >=3.10
 - biopython >=1.84
