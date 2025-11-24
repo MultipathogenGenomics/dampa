@@ -12,6 +12,8 @@ The core design pipeline:
  - refine probe set relative to input genomes with probetools
  - generate summary plots and statistics
 
+![dampa pipeline](dampa_pipeline.jpg)
+
 
 ## Dependencies
 - python >=3.10
