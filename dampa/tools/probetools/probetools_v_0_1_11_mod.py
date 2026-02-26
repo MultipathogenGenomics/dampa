@@ -378,7 +378,7 @@ def add_low_cov_length_to_capture_data(capture_data, min_low_cov_length):
                         covlist[j] = 1
             else:
                 i += 1
-        capture_data[target_id][1] = covlist
+        capture_data[target_id] = (capture_data[target_id][0],covlist)
     return capture_data
 
 def get_low_cov(out_path, name, capture_path, k, min_depth, min_length):
