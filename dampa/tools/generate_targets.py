@@ -865,7 +865,7 @@ def add_species_to_nodedf(graph):
     graph.nodes.df["path_species"] = graph.nodes.df["path_name"].apply(lambda x: str(x).split("_")[0])
 
 
-def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
+def generate_targets(injson,nthresh,lenthresh,graphid,outfile,target_unioncov,subnode_cluster_thresh=0.95,logger=None):
     graph = pp.Pangraph.from_json(injson)
     components = non_recursive_findcomponent(graph)
     component_species = find_species(components) # TODO separate species definition table when added to castanet
@@ -899,8 +899,8 @@ def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
                     logger.warning(f"No targets generated for component {component} species {s} all nodes may have been filtered out.")
                 continue
             for sequence in paddedseqs:
-                sequence.id = f"{s}-component{component}-{sequence.id}"
-                sequence.description = f"singlespecies_component"
+                sequence.id = f"graph{graphid}block{s}-component{component}-{sequence.id}"
+                sequence.description = f"singlespecies_component_{component}"
             outtargets.extend(paddedseqs)
             if logger:
                 logger.debug(
@@ -919,7 +919,7 @@ def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
 
 def main():
     args = get_args()
-    generate_targets(args.graphjson,args.nthresh,args.lenthresh,args.outfile)
+    generate_targets(args.graphjson,args.nthresh,args.lenthresh,args.graphid,args.outfile,True)
 
 if __name__ == "__main__":
     main()
