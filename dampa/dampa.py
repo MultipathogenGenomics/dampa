@@ -905,7 +905,7 @@ def subambig(probes,props):
              'H':['A','C','T'],
              'D':['A','G','T'],
              'V':['A','C','G'],
-             'N':['A','T','C','T']}
+             'N':['A','T','C','G']}
 
     rawprobes = SeqIO.parse(probes,"fasta")
     outprobes = []
@@ -1022,7 +1022,6 @@ def write_filtered_genomes(filtered, outloc,descriptions):
     """
     outpath = f"{outloc}_filtered_genomes.tsv"
 
-    # filtered["genome description"] = descriptions
     filtered["genome description"] = filtered["genome id"].map(descriptions)
 
     filtered.to_csv(outpath, sep="\t", index=False)
@@ -1063,11 +1062,13 @@ def get_args():
                         help="path to output folder",default=f"{cwd}/")
     design_inputs.add_argument("-p", "--outputprefix", default="probebench_run",
                         help="prefix for all output files and folders")
+    design_inputs.add_argument("--maxnonspandard",
+                        help="maximum proportion of genome that can be non ATGC (0-1)",type=float,default=0.01)
 
     general = design.add_argument_group("General settings")
 
     general.add_argument("-l", "--probelen", type=int, default=120,help="length of output probes")
-    general.add_argument("-s", "--probestep", type=int, default=120, help="step of probes (for no overlap set to same as probelen)")
+    general.add_argument("-s", "--probestep", type=int, default=120, help="step of probes (for no overlap or gaps set to same as probelen)")
     general.add_argument("--skipsubambig",
                         help="do NOT substitute ambiguous nucleotides (by default N or other ambiguous nucleotides are substituted for ATGC in a random selection weighted by proportions in input genomes",action='store_true')
     general.add_argument("--shannonthresh", type=float, default=1.5, help="minimum shannon entropy of probes and reported coverage regions (filters out low complexity probes/regions)")
@@ -1113,7 +1114,7 @@ def get_args():
                                     default=1)
     outlierclustersettings.add_argument("--outlierclusterident", type=float, default=0.85,
                                     help="outlier identity threshold, i.e. if a cluster is <outlierclusterident and <=outliersizelimit members it is treated as an outlier")
-    preclustersettings.add_argument("--outlierclustercov", type=float, default=1,
+    outlierclustersettings.add_argument("--outlierclustercov", type=float, default=1.0,
                                     help="Minimum coverage of genomes over which clusterident must apply (0-1)")
 
     targetgen_settings = design.add_argument_group("target generation settings",
@@ -1347,6 +1348,7 @@ def main():
             rminp = True
             logger.info("Using cdhit to cluster genomes")
             filtered_input = cdhit_subset(args, filtered_input)
+            # TODO add optional eval against total input dataset not only clustered if clustering is performed
 
         totalprobes = design_probes(args, filtered_input, probeprefix, overallprops,rminp,outloc)
         if args.remove_outliers:
