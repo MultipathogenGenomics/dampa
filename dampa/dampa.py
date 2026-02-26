@@ -698,7 +698,7 @@ def runprobetoolscapture(args,probes,outloc,genomes):
             dust = " -y Y"
 
         # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
-        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {genomes}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads}"
+        cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {genomes}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -L {args.probetools0covnmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{outloc}_capture.pt"
     if os.path.exists(outf):
@@ -1176,7 +1176,7 @@ def get_args():
 
     probetooleval = evaluate.add_argument_group("Probetools settings")
 
-    probetooleval.add_argument("--probetoolsidentity", type=int, default=85,
+    probetooleval.add_argument("--probetoolsidentity", type=int, default=80,
                                     help="Minimum identity in probe match to target to call probe binding")
     probetooleval.add_argument("--probetoolsalignmin", type=int, default=90,help="Minimum length (bp) of probe-target binding to allow call of binding")
     probetooleval.add_argument("--probetools0covnmin", type=int, default=20,
