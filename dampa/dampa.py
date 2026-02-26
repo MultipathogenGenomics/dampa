@@ -635,35 +635,6 @@ def run_finalprobetools(args, inprobes,originput,outloc):
     else:
         logger.error(f"Probetools output file {finalprobes} not present. Check for error in details probetools log.")
 
-
-def get_clusters(args):
-    """
-    Loads cluster assignments from a file.
-
-    Args:
-        args (argparse.Namespace): The arguments passed to the script, containing various settings and file paths.
-
-    Returns:
-        dict: Dictionary mapping strains to clusters.
-    """
-    clusterdict = {}
-    cluster = ""
-    if args.clustertype == "cdhit":
-        clstrfile = open(args.clusterassign, "r").readlines()
-        for line in clstrfile:
-            if line.startswith(">"):
-                cluster = line.strip().replace(">Cluster ", "")
-            else:
-                strain = line.split(" ")[1][1:-3]
-                clusterdict[strain] = cluster
-    elif args.clustertype == "tabular":
-        clstrfile = open(args.clusterassign, "r").readlines()
-        for line in clstrfile:
-            strain = line.split("\t")[0]
-            cluster = line.split("\t")[1]
-            clusterdict[strain] = cluster
-    return clusterdict
-
 def load_capture_data(capture_path,probetools0covnmin):
     """
     Loads capture data from a file.
@@ -834,8 +805,6 @@ def make_summaries(args,ptcountfile,totalprobes,outloc):
         None
     """
     clusterdict = {}
-    if args.clusterassign:
-        clusterdict = get_clusters(args)
     depthls = []
     names = []
     meancovs = []
@@ -1088,13 +1057,6 @@ def get_args():
     design_inputs = design.add_argument_group("Input/Output options")
 
     design_inputs.add_argument("-g", "--input", required=True, help="Either folder containing individual genome fasta files OR a single fasta file containing all genomes (files must end in .fna, .fa or .fasta)",type=DirorFolder)
-    design_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
-                        type=File)
-    design_inputs.add_argument("--clustertype",
-                        help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['cdhit','tabular'],
-                        default='tabular')
-    design_inputs.add_argument("--maxnonspandard",
-                        help="maximum proportion of genome that can be non ATGC (0-1)",type=float,default=0.01)
 
     design_inputs.add_argument("-o", "--outputfolder", type=Dir,
                         help="path to output folder",default=f"{cwd}/")
@@ -1204,11 +1166,6 @@ def get_args():
     eval_inputs.add_argument("-q", "--probes", required=True,
                              help="Fasta file containing probes to evaluate (files must end in .fna, .fa or .fasta)",
                              type=File)
-    eval_inputs.add_argument("-c", "--clusterassign", help="clstr file from cd-hit",
-                        type=File)
-    eval_inputs.add_argument("--clustertype",
-                        help="type of cluster file input cdhit (produced by cdhit) or tabular (genome and cluster tab delimited) ", choices=['cdhit','tabular'],
-                        default='tabular')
     eval_inputs.add_argument("--filtnonstandard",
                         help="remove genomes with non standard nucleotides i.e. not A,T,G,C or N",action='store_true')
 
