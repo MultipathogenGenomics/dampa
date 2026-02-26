@@ -534,18 +534,19 @@ def run_pangraph(args,filtinput,outloc):
     else:
         adds = ""
 
-
+    pangraphversion = "v1_1_0"
+    pangraphvpath = f"tools/pangraph/{pangraphversion}/"
     if args.maxdiv and platform.system().lower() == "darwin":
         logger.info("--maxdiv enables strict identity threshold for Pangraph (arm macOS version only) which is still in development. Beware this may not work as expected.")
         pangraphex = "pangraph-maxdiv-aarch64-darwin"
-        pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        pangraphpath = importlib.resources.files("dampa").joinpath(pangraphvpath+pangraphex)
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads}{adds} {filtinput} > {outloc}.json && {pangraphpath} export gfa --include-sequences -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     elif args.maxdiv and platform.system().lower() != "darwin":
         logging.error("strict identity threshold only available in arm macOS version of pangraph (change once pangraph main branch updated)")
     else:
         pangraphex = select_pangraph_binary() # TODO may be issues when conda is installed as x86 but running on arm64
-        pangraphpath = importlib.resources.files("dampa").joinpath("tools/pangraph/"+pangraphex)
-        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
+        pangraphpath = importlib.resources.files("dampa").joinpath(pangraphvpath+pangraphex)
+        cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa --include-sequences -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
     subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
