@@ -22,7 +22,7 @@ def non_recursive_findcomponent(pangraph, newpaths=None, searched=None, componen
                 return components
             else:
                 if c > 0:
-                    pass  # print(f"component {c} done, {len(components[c])} paths, {len(remainingpaths)} paths remaining")
+                    pass
                 c += 1
                 searched = set()
                 searchls = [remainingpaths.pop()]
@@ -55,7 +55,6 @@ def find_species(components):
     species = {}
     for c in components:
         for path in components[c]:
-            # s = "_".join(path.split(".")[0].split("_")[:2])
             s = path.split("_")[0]
             if c not in species:
                 species[c] = set()
@@ -139,8 +138,7 @@ def filter_short_terminal_blocks(ingraph,lenthresh,rmblocks):
         if block.id in only_first_or_last:
             if block.id not in rmblocks:
                 if len(block.consensus()) < lenthresh:
-                    rmblocks.add(blockid)
-                    # print(f"rm {blockid} small")
+                    rmblocks.append(block.id)
 
     return rmblocks
 
@@ -298,7 +296,6 @@ def pad_short_paths(graph,usedpaths):
     outtargets = {s.id:s for s in usedpaths}
     pathdf = graph.nodes.df
 
-    # usedpaths = ["LY720046.1"]
     usedpathstrim = [x.id.replace("_path_consensus","") for x in usedpaths]
     usedpathidx_to_name = {x:graph.paths.id_to_pos[x] for x in usedpathstrim}
     usedpathidx = usedpathidx_to_name.values()
@@ -334,7 +331,6 @@ def pad_short_paths(graph,usedpaths):
             outseqs.append(outtargets[pathname+"_path_consensus"])
             continue
 
-        # print("newlongest",graph.paths.list[longestoverlappingpath[0]].name,longestoverlappingpath[0],longestoverlappingpath[1],pathname,pathindex,graph.paths.list[pathindex].nuc_len)
         """
         get overlapping blocks from longest path.
         """
@@ -382,7 +378,6 @@ def pad_short_paths(graph,usedpaths):
 
     unchangedseqs = [outtargets[x] for x in outtargets if x.replace("_path_consensus","") not in shortpaths]
     alloutseqs = unchangedseqs + outseqs
-    # SeqIO.write(alloutseqs, outpath.replace(".fa","_padded.fa").replace(".fasta","_padded.fasta"), "fasta")
     return alloutseqs,padded
 
 
@@ -483,8 +478,6 @@ def add_species_to_nodedf(graph):
 
 def generate_targets(injson, nthresh,lenthresh,outfile,logger=None):
     graph = pp.Pangraph.from_json(injson)
-
-    # components = recursive_findcomponent(graph)
     components = non_recursive_findcomponent(graph)
     component_species = find_species(components) # TODO separate species definition table when added to castanet
     add_species_to_nodedf(graph)
