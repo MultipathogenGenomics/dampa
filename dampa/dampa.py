@@ -987,8 +987,9 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
     if not success:
         return 0
     split_pangenome_into_probes(pangenomefasta, probename, args.probelen, args.probestep, args.maxambig,args.shannonthresh, probeprefix)
-    targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
-    logger.info(f"Generated {lentargets} target pseudogenomes to cover pangenome graph")
+    if args.generate_targets:
+        targets,lentargets = generate_targets(pangenome_graph_json,args.nthresh,lenthresh=args.probelen,graphid=args.graphid,outfile=targets,target_unioncov=args.target_unioncov,subnode_cluster_thresh=args.subnodeidentitythresh,logger=logger)
+        logger.info(f"Generated {lentargets} target pseudogenomes to cover pangenome graph")
     if not args.skip_padding:
         make_padded_probes(pangenomefasta, probename, args.minlenforpadding, probeprefix=probeprefix)
     if not args.skip_probetoolsfinal:
@@ -1115,6 +1116,15 @@ def get_args():
     preclustersettings.add_argument("--outlierclustercov", type=float, default=1,
                                     help="Minimum coverage of genomes over which clusterident must apply (0-1)")
 
+    targetgen_settings = design.add_argument_group("target generation settings",
+                                                       "These settings control the generation of target sequences from the pangenome graph nodes for use in downstream analysis of sequencing data (i.e. with castanet)")
+    targetgen_settings.add_argument("--generate_targets", help="generate target sequences from pangenome graph nodes",
+                                    action='store_true')
+    targetgen_settings.add_argument("--subnodeidentitythresh", type=float, default=0.95,
+                                    help="Identity threshold at which sequences within a pangenome node is clustered to generate targets (i.e. if set to 0.95 sequences within a node that are >95 percent identical are clustered together and a target generated for each cluster)")
+    targetgen_settings.add_argument("--target_unioncov",
+                        help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
+
     additionalsettings = design.add_argument_group("Additional settings")
 
     additionalsettings.add_argument("--skip_padding",
@@ -1228,8 +1238,11 @@ def get_args():
                                 help="number of threads",
                                 type=int,
                                 default=1)
-
-
+    generaltargets.add_argument("--subnodeidentitythresh", type=float, default=0.95,
+                                    help="Identity threshold at which sequences within a pangenome node is clustered to generate targets (i.e. if set to 0.95 sequences within a node that are >95percent identical are clustered together and a single target generated)")
+    generaltargets.add_argument("--target_unioncov",
+                        help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
+    #"(injson,nthresh,lenthresh,outfile,target_unioncov,subnode_cluster_thresh=0.95,logger=None)"
 
 
 
@@ -1346,9 +1359,8 @@ def main():
 
     elif args.command == "targets":
         logger.info("Running dampa targets")
-        pangenome_graph_json = args.inputjson
         targets = outloc + "_targets.fasta"
-        targets,lentargets = generate_targets(pangenome_graph_json,0.1,lenthresh=args.probelen,outfile=targets,logger=logger)
+        targets,lentargets = generate_targets(args.inputjson,args.nthresh,lenthresh=args.probelen,graphid=args.graphid,outfile=targets,target_unioncov=args.target_unioncov,subnode_cluster_thresh=args.subnodeidentitythresh,logger=logger)
         logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
     elif args.command == "eval":
         if args.version:
