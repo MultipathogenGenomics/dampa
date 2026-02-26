@@ -78,7 +78,7 @@ def shannon_entropy(seq: str) -> float:
     return entropy
 
 
-def softmask_low_complexity(seqrec: SeqRecord, window: int = 120, cutoff: float = 1.6) -> Seq:
+def softmask_low_complexity(seqrec: SeqRecord.SeqRecord, window: int = 120, cutoff: float = 1.6) -> SeqRecord.SeqRecord:
     """
     Soft-mask (lowercase) bases in low-complexity regions of a Bio.Seq object.
 
@@ -100,22 +100,44 @@ def softmask_low_complexity(seqrec: SeqRecord, window: int = 120, cutoff: float 
     return seqrec
 
 def rm_N_blocks(graph, nthresh):
-    rmblocks = set()
+    rmblocks = []
     for block in graph.blocks:
         Ncount = block.consensus().count("N") + block.consensus().count("n")
         nproportion = float(Ncount) / len(block.consensus())
-        if nproportion > nthresh:
+        conslen = len(block.consensus())
+        if nproportion > nthresh or conslen < 90:
             blockid = block.id
-            rmblocks.add(blockid)
+            if blockid not in rmblocks:
+                rmblocks.append(blockid)
     return rmblocks
 
 def filter_short_terminal_blocks(ingraph,lenthresh,rmblocks):
-    for pathname,path in ingraph.paths.items():
-        terminalnode = [x[1] for x in enumerate(path.nodes) if x[0] == 0 or x[0] == len(path.nodes)-1]
-        for node in terminalnode:
-            blockid = ingraph.nodes.df.at[str(node),"block_id"]
-            if blockid not in rmblocks:
-                block=ingraph.blocks[blockid]
+    nodedf = ingraph.nodes.df.sort_values(["path_id", "start", "end"])
+
+    # Rank blocks within each path
+    nodedf["order"] = nodedf.groupby("path_id").cumcount()
+
+    # Count how many blocks per path
+    nodedf["n_blocks"] = nodedf.groupby("path_id")["block_id"].transform("count")
+
+    # Assign labels
+    def classify(row):
+        if row["n_blocks"] == 1:
+            return "first"  # or "only" if you prefer
+        if row["order"] == 0:
+            return "first"
+        if row["order"] == row["n_blocks"] - 1:
+            return "last"
+        return "middle"
+
+    nodedf["position"] = nodedf.apply(classify, axis=1)
+    pos_per_block = nodedf.groupby("block_id")["position"].unique()
+
+    # Keep block_ids that do NOT include "middle"
+    only_first_or_last = pos_per_block[pos_per_block.apply(lambda x: "middle" not in x)].index
+    for block in ingraph.blocks:
+        if block.id in only_first_or_last:
+            if block.id not in rmblocks:
                 if len(block.consensus()) < lenthresh:
                     rmblocks.add(blockid)
                     # print(f"rm {blockid} small")
@@ -158,6 +180,111 @@ def get_args():
                         help='minimum length of terminal blocks to keep them, otherwise they are ignored.')
     parser.add_argument('--outfile', type=str, required=True, help='output fasta file of path consensus sequences covering all nodes.')
     return parser.parse_args()
+
+def get_start_end_padding(graph,pathdf,seqs,blocktoignore):
+    #TODO remove blocks that are ignored from pathdf before running
+    """chosen_subclustpath"""
+    outtargets = {s.id: s for s in seqs}
+    #for each unique value in pathdf["chosen_subclustpath"] get pathdf["path_id"], make unique list of path ids
+    sub_to_path = pathdf[pathdf["union_subclustpath"]].groupby('subcluster_path_id')['path_name'].first().to_dict()
+    pathname_to_id = pathdf.groupby('path_name')['path_id'].first().to_dict()
+    id_to_pathname = {v: k for k, v in pathname_to_id.items()}
+    path_to_sub = {v: k for k, v in sub_to_path.items()}
+    correspondingpaths = list(sub_to_path.values())
+    usedpathlens = {graph.paths.list[pathname_to_id[p]].name: graph.paths.list[pathname_to_id[p]].nuc_len for p in correspondingpaths}
+    strblocktoignore = list(map(str,blocktoignore))
+    if len(usedpathlens) < 4:
+        thresh = max(usedpathlens.values())
+    else:
+        thresh = stats.quantiles(usedpathlens.values(),n=4)[2]
+    shortpaths = [p for p in usedpathlens if usedpathlens[p] < thresh]
+    longpaths = [p for p in usedpathlens if usedpathlens[p] >= thresh]
+
+    padding = {}
+    for longpath in longpaths:
+        padding[longpath] = (0,0)
+    for pathname in shortpaths:
+        longestoverlappingpath = ("x", 0)
+        pathindex = graph.paths.id_to_pos[pathname]
+        shortblocks = pathdf[pathdf["path_id"] == pathindex]
+
+        for blockid in shortblocks["block_id"]:
+            if blockid not in blocktoignore:
+                blockpaths = pathdf[pathdf["block_id"].astype(str) == str(blockid)]["path_id"].tolist()
+                # blockpaths = pathdf[pathdf["block_id"].astype(str) == str(blockid)]["path_name"].tolist()
+                ...
+                blockpaths = [p for p in blockpaths if id_to_pathname[p] in correspondingpaths if p != pathindex]
+                if len (blockpaths) == 0:
+                    continue
+                pathlens = {p: graph.paths.list[p].nuc_len for p in blockpaths}
+                maxlen = max(pathlens.values())
+                maxlenid = max(pathlens, key=pathlens.get)
+
+                if maxlen > longestoverlappingpath[1]:
+                    longestoverlappingpath = (maxlenid,maxlen)
+
+        if longestoverlappingpath[0] == "x":
+            padding[pathname] = (0,0)
+            continue
+
+        """
+        get overlapping blocks from longest path.
+        """
+        shortblockslist = shortblocks["block_id"].tolist()
+        shortblockslist = [b for b in shortblockslist if str(b) not in strblocktoignore]
+        longpathid = longestoverlappingpath[0]
+        longpathname = graph.paths.list[longestoverlappingpath[0]].name
+        longpathblocks = pathdf[pathdf["path_id"] == longpathid]["block_id"].tolist()
+        longpathblocks = [b for b in longpathblocks if str(b) not in strblocktoignore]
+        overlaps = [b for b in shortblockslist if b in longpathblocks]
+
+        longpathoverlapnodes = pathdf[(pathdf["path_id"] == longpathid)&(pathdf["block_id"].isin(overlaps))]
+        shortpathoverlapnodess = pathdf[(pathdf["path_id"] == pathindex)&(pathdf["block_id"].isin(overlaps))]
+        """get first and last block_id in longpathoverlapnodes based on start and end positions"""
+        longstartblock = longpathoverlapnodes.sort_values("start").iloc[0]
+        longendblock = longpathoverlapnodes.sort_values("end").iloc[-1]
+        shortstartblock = shortpathoverlapnodess.sort_values("start").iloc[0]
+        shortendblock = shortpathoverlapnodess.sort_values("end").iloc[-1]
+        """get consensus for each block using graph.blocks[blockid].consensus()"""
+        try:
+            longstartcons = graph.blocks[int(longstartblock["block_id"])].consensus()
+        except:
+            print("error getting longstartcons for block",longstartblock["block_id"])
+
+            continue
+        longendcons = graph.blocks[int(longendblock["block_id"])].consensus()
+        shortstartcons = graph.blocks[int(shortstartblock["block_id"])].consensus()
+        shortendcons = graph.blocks[int(shortendblock["block_id"])].consensus()
+        """ get the sequences from outtargets[pathname+"_path_consensus"].seq"""
+        shortpathseqname = path_to_sub[pathname]
+        longpathseqname = path_to_sub[longpathname]
+        shortseq = outtargets[shortpathseqname].seq
+        longseq = outtargets[longpathseqname].seq
+        """ find the position of the start and end consensus in each sequence"""
+        shortoverlapstart = shortseq.find(shortstartcons)
+        shortoverlapend = shortseq.find(shortendcons)
+        shortlen = len(shortseq)
+        longoverlapstart = longseq.find(longstartcons)
+        longoverlapend = longseq.find(longendcons)
+        longlen = len(longseq)
+        """ calculate padding needed on left and right"""
+        padleft = longoverlapstart - shortoverlapstart
+        padright = (longlen - longoverlapend) - (shortlen - shortoverlapend)
+        if padleft < 0:
+            padleft = 0
+        if padright < 0:
+            padright = 0
+        padding[pathname] = (padleft,padright)
+
+    paddedseqs = []
+    for seq in seqs:
+        pathname = sub_to_path[seq.id]
+        padleft,padright = padding[pathname]
+        newseq = padleft*"N"+str(seq.seq)+padright*"N"
+        newseqobj = SeqRecord.SeqRecord(Seq.Seq(newseq), id=seq.id, description=seq.description)
+        paddedseqs.append(newseqobj)
+
+    return paddedseqs
 
 def pad_short_paths(graph,usedpaths):
     """
