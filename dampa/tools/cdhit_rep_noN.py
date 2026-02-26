@@ -39,6 +39,6 @@ if __name__ == "__main__":
     if len(sys.argv) != 4:
         print("Usage: python cdhit_rep_noN.py <fasta_file> <clstr_file> <output_file>")
         sys.exit(1)
-    clusters,cdhitreps = longest_or_fewest_ns_representatives(sys.argv[1], sys.argv[2])
+    clusters,cdhitreps = longest_or_fewest_ns_representatives(SeqIO.to_dict(SeqIO.parse(sys.argv[1],"fasta")), sys.argv[2])
     with open(sys.argv[3], "w") as out_f:
         SeqIO.write(cdhitreps, out_f, "fasta")
