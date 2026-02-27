@@ -1125,6 +1125,8 @@ def get_args():
                                     help="Identity threshold at which sequences within a pangenome node is clustered to generate targets (i.e. if set to 0.95 sequences within a node that are >95 percent identical are clustered together and a target generated for each cluster)")
     targetgen_settings.add_argument("--target_unioncov",
                         help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
+    targetgen_settings.add_argument("-g","--graphid",
+                        help="ID to be used in naming graph in output file headers",action='store_true')
 
     additionalsettings = design.add_argument_group("Additional settings")
 
@@ -1243,6 +1245,8 @@ def get_args():
                                     help="Identity threshold at which sequences within a pangenome node is clustered to generate targets (i.e. if set to 0.95 sequences within a node that are >95percent identical are clustered together and a single target generated)")
     generaltargets.add_argument("--target_unioncov",
                         help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
+    generaltargets.add_argument("-g","--graphid",
+                        help="ID to be used in naming graph in output file headers",action='store_true')
     #"(injson,nthresh,lenthresh,outfile,target_unioncov,subnode_cluster_thresh=0.95,logger=None)"
 
 
