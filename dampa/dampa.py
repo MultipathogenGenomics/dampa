@@ -1125,8 +1125,10 @@ def get_args():
                                     help="Identity threshold at which sequences within a pangenome node is clustered to generate targets (i.e. if set to 0.95 sequences within a node that are >95 percent identical are clustered together and a target generated for each cluster)")
     targetgen_settings.add_argument("--target_unioncov",
                         help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
-    targetgen_settings.add_argument("-g","--graphid",
-                        help="ID to be used in naming graph in output file headers",action='store_true')
+    targetgen_settings.add_argument("--graphid",
+                        help="ID to be used in naming graph in output file headers")
+    targetgen_settings.add_argument("--nthresh", type=float, default=0.1,
+                                help="proportion of Ns allowed in any given graph node to be included in targets")
 
     additionalsettings = design.add_argument_group("Additional settings")
 
@@ -1245,14 +1247,20 @@ def get_args():
                                     help="Identity threshold at which sequences within a pangenome node is clustered to generate targets (i.e. if set to 0.95 sequences within a node that are >95percent identical are clustered together and a single target generated)")
     generaltargets.add_argument("--target_unioncov",
                         help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
-    generaltargets.add_argument("-g","--graphid",
-                        help="ID to be used in naming graph in output file headers",action='store_true')
+    generaltargets.add_argument("--graphid",
+                        help="ID to be used in naming graph in output file headers")
     #"(injson,nthresh,lenthresh,outfile,target_unioncov,subnode_cluster_thresh=0.95,logger=None)"
 
 
 
 
     args = parser.parse_args()
+    if args.command == "design":
+        if not args.graphid and args.generate_targets:
+            args.graphid = args.outputprefix
+    elif args.command == "targets":
+        if not args.graphid:
+            args.graphid = args.outputprefix
 
     return args,parser
 
@@ -1367,6 +1375,7 @@ def main():
         logger.info("Running dampa targets")
         targets = outloc + "_targets.fasta"
         targets,lentargets = generate_targets(args.inputjson,args.nthresh,lenthresh=args.probelen,graphid=args.graphid,outfile=targets,target_unioncov=args.target_unioncov,subnode_cluster_thresh=args.subnodeidentitythresh,logger=logger)
+        shutil.copy(args.inputjson,outloc + "_graph.json")
         logger.info(f"Generated {lentargets} target psudogenomes to cover pangenome graph")
     elif args.command == "eval":
         if args.version:

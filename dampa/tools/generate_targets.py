@@ -8,6 +8,7 @@ import pandas as pd
 import subprocess
 from io import StringIO
 import sys
+import re
 
 def non_recursive_findcomponent(pangraph, newpaths=None, searched=None, components=None, c=0):
     if searched is None:
@@ -280,7 +281,7 @@ def get_start_end_padding(graph,pathdf,seqs,blocktoignore):
         pathname = sub_to_path[seq.id]
         padleft,padright = padding[pathname]
         newseq = padleft*"N"+str(seq.seq)+padright*"N"
-        newseqobj = SeqRecord.SeqRecord(Seq.Seq(newseq), id=seq.id, description=seq.description)
+        newseqobj = SeqRecord.SeqRecord(Seq.Seq(newseq), id=seq.id, description="")
         paddedseqs.append(newseqobj)
 
     return paddedseqs
@@ -395,7 +396,7 @@ def assign_block_subcluster(component_nodes,component_blocks,block_to_ignore,gra
         if blockid not in block_to_ignore:
             blockalign = graph.blocks[blockid].to_biopython_alignment()
             blockseqs = [
-                SeqRecord.SeqRecord(Seq.Seq(str(record.seq).replace("-", "")), id=record.id, description=record.description)
+                SeqRecord.SeqRecord(Seq.Seq(str(record.seq).replace("-", "")), id=record.id, description="")
                 for record in blockalign
             ]
 
@@ -487,9 +488,6 @@ def single_species_targetgen_node_subclust(graph,pathlist,nthresh,lenthresh,outf
     block_to_ignore = list(filter_short_terminal_blocks(graph, lenthresh, block_to_ignore))
     ## before doing subnode clustering etc get set of paths that cover all non ignored blocks like in old function, then can remove all other paths from component_nodes
     nodes_to_ignore = graph.nodes.df[graph.nodes.df["block_id"].isin(block_to_ignore)].index.tolist()
-    if "15205707089436575906" in block_to_ignore:
-        ...
-
     component_nodes = graph.nodes.df[graph.nodes.df["path_name"].isin(pathlist)]
 
     component_nodes["ignoreblock"] = component_nodes['block_id'].isin(block_to_ignore)
@@ -575,7 +573,7 @@ def single_species_targetgen_node_subclust(graph,pathlist,nthresh,lenthresh,outf
                 # outseq = outseq + rep
                 subclusterrep = node_to_subcluster_rep[str(rep)]
                 outseq += str(subclusterrep.seq)
-        outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=subpg, description="singlespecies_component_subpg")
+        outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=subpg, description="")
         maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)  # TODO parameterize
         subpg_seqs.append(maskedseq)
         subpgno += 1
@@ -663,20 +661,20 @@ def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,subnode_cl
         for blockid in component_blocks:
             blockalign = graph.blocks[blockid].to_biopython_alignment()
             blockseqs = [
-                SeqRecord.SeqRecord(Seq.Seq(str(record.seq).replace("-", "")), id=record.id, description=record.description)
+                SeqRecord.SeqRecord(Seq.Seq(str(record.seq).replace("-", "")), id=record.id, description="")
                 for record in blockalign
             ]
             reps = runvsearch_consout(blockseqs, outfile, cutoff=subnode_cluster_thresh)
             if len(reps) == 1:
                 blockconsensus = graph.blocks[blockid].consensus()
-                blockseq = SeqRecord.SeqRecord(Seq.Seq(blockconsensus), id=f"{blockid}_{componentspecies}-single_consensus", name="",
-                                               description="GRAPH_singlespecies_component")
+                blockseq = SeqRecord.SeqRecord(Seq.Seq(blockconsensus), id=f"{blockid}_{componentspecies}-rep1", name="",
+                                               description="")
                 outseq.append(blockseq)
             else:
                 r = 1
                 for rep in reps:
-                    rep.id = f"{blockid}_{componentspecies}-single_rep_{r}"
-                    rep.description = "GRAPH_singlespecies_component"
+                    rep.id = f"{blockid}_{componentspecies}-rep{r}"
+                    rep.description = ""
                     outseq.append(rep)
                     r += 1
         outseq = [softmask_low_complexity(x, window=120, cutoff=1.6) for x in outseq]
@@ -813,46 +811,44 @@ def multi_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,subnode_clu
         if len(speciesls) == 1:
 
             species = block_to_species[blockid]
-
+            species = species[0]
+            modspecies = re.sub(r'[^A-Za-z0-9_.\- ]', '', species)
             blockalign = graph.blocks[blockid].to_biopython_alignment()
             blockseqs = [
                 SeqRecord.SeqRecord(Seq.Seq(str(record.seq).replace("-", "")), id=record.id,
-                                    description=record.description)
+                                    description="")
                 for record in blockalign
             ]
             reps = runvsearch_consout(blockseqs, outfile, cutoff=subnode_cluster_thresh)
             if len(reps) == 1:
                 blockconsensus = graph.blocks[blockid].consensus()
-                sid = f"graph{graphid}block{blockid}_{species[0]}-single_consensus"
+                sid = f"graph{graphid}block{blockid}_{modspecies}"
                 blockseq = SeqRecord.SeqRecord(Seq.Seq(blockconsensus), id=sid, name="",
-                                               description=f"GRAPH_multispecies_component_{component}")
+                                               description="")
                 outseq.append(blockseq)
             else:
                 r = 1
                 for rep in reps:
-                    rep.id = f"graph{graphid}block{blockid}_{species[0]}-single_rep_{r}"
-
-                    rep.description = f"GRAPH_multispecies_component_{component}"
+                    rep.id = f"graph{graphid}block{blockid}_{modspecies}-rep{r}"
                     outseq.append(rep)
                     r += 1
             ...
         elif len(speciesls) > 1:
 
-            species = block_to_species[blockid]
             blockalign = graph.blocks[blockid].to_biopython_alignment()
             blockseqs = [
                 SeqRecord.SeqRecord(Seq.Seq(str(record.seq).replace("-", "")), id=record.id,
-                                    description=record.description)
+                                    description="")
                 for record in blockalign
             ]
             for species in speciesls:
+                modspecies = re.sub(r'[^A-Za-z0-9_.\- ]', '', species)
                 speciesnodes = component_nodes[(component_nodes["block_id"]==blockid)&(component_nodes["path_species"]==species)].index.to_list()
                 subset_records = [record for record in blockseqs if record.id in speciesnodes]
                 reps = runvsearch_consout(subset_records, outfile, cutoff=subnode_cluster_thresh)
                 r=1
                 for rep in reps:
-                    rep.id = f"graph{graphid}block{blockid}_{species}-multi_rep_{r}"
-                    rep.description = f"GRAPH_multispecies_component_{component}"
+                    rep.id = f"graph{graphid}block{blockid}_{modspecies}-rep{r}"
                     outseq.append(rep)
                     r+=1
 
@@ -899,8 +895,12 @@ def generate_targets(injson,nthresh,lenthresh,graphid,outfile,target_unioncov,su
                     logger.warning(f"No targets generated for component {component} species {s} all nodes may have been filtered out.")
                 continue
             for sequence in paddedseqs:
-                sequence.id = f"graph{graphid}block{s}-component{component}-{sequence.id}"
-                sequence.description = f"singlespecies_component_{component}"
+                modgraphid = re.sub(r'[^A-Za-z0-9_.\- ]', '', graphid)
+                if graphid == s:
+                    sequence.id = f"graph{modgraphid}-c{component}-{sequence.id}"
+                else:
+                    modspecies = re.sub(r'[^A-Za-z0-9_.\- ]', '', s)
+                    sequence.id = f"graph{modgraphid}block{modspecies}-c{component}-{sequence.id}"
             outtargets.extend(paddedseqs)
             if logger:
                 logger.debug(
