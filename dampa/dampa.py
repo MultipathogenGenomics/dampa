@@ -140,13 +140,11 @@ def split_to_reg_or_outliers(lowclusters, strain_to_highcluster_size,highcdhitre
             # if only x sequence in low cluster, check if also x seq in high cluster
             strain = lowclusters[cluster][0]
             highclustersize = strain_to_highcluster_size[strain]
-            # print(strain,highclustersize)
+
             if highclustersize == lowclustersize:
-                # print(f"low cluster {cluster} with {lowclustersize} sequences is also a high cluster with {highclustersize} sequences. This is an outlier cluster.")
                 altclustscount += 1
                 for i in lowclusters[cluster]:
                     altstrains.append(inseqs[i])
-                    # print(inseqs[i])
 
     regstraintotal = 0
     altstrainids = [altstrain.id for altstrain in altstrains]
@@ -295,7 +293,6 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
             i = strip_polyA(i)
             if str(i.seq) != str(oldi.seq):
                 trimmed = len(oldi.seq) - len(i.seq)
-                # logger.info(f"{trimmed}bp have been trimmed from genome {i.id}")
                 newrow = {"genome id": i.id, "genome description": i.description,
                           "filter reason": "trimmed polyA (not removed)",
                           "Genome length": seqlen, "nonstandard proportion / metric": trimmed}
@@ -571,7 +568,6 @@ def run_pangraph(args,filtinput,outloc):
                 return False
             logger.info(
                 f"Reduced pangenome node number: Original: {original}, Kept: {final}, Removed: {removed}, N-filtered: {nfilt}")
-        # terminal_node_additional_clustering()
 
         logger.info("Pangenome graph linear chain merging completed")
     else:
@@ -645,7 +641,6 @@ def load_capture_data(capture_path,probetools0covnmin):
     Returns:
         dict: Dictionary containing capture data.
     """
-    # print(f'Loading capture data from {capture_path}...')
     with open(capture_path, 'r') as input_file:
         headers, seqs, depths = [], [], []
         for line in input_file:
@@ -675,7 +670,6 @@ def load_capture_data(capture_path,probetools0covnmin):
         if len(capture_data[header][0]) != len(capture_data[header][1]):
             logger.error(f'Seq length and probe depth list length do not match for entry {header}.')
             exit(1)
-    # print(f' Total targets loaded: {"{:,}".format(len(capture_data))}')
     return capture_data
 
 def runprobetoolscapture(args,probes,outloc,genomes):
@@ -696,8 +690,6 @@ def runprobetoolscapture(args,probes,outloc,genomes):
             dust = " -y N"
         else:
             dust = " -y Y"
-
-        # outf = open("/Users/mpay0321/Dropbox/Probe_design_project/2025-01-29_integrate_probetools_probebench/stdout.txt",'w')
         cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {genomes}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -L {args.probetools0covnmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{outloc}_capture.pt"
@@ -863,35 +855,6 @@ def get_probeno(probefile,subsetstr=""):
         addedprobes = []
     totalprobes = len([x for x in outprobes if x.startswith(">")])
     return totalprobes,len(addedprobes)
-
-
-def convert_ambig_nucs(props,seq):
-    ambig = {"R":["A","G"],
-             "K":['G','T'],
-             'S':['G','C'],
-             'Y':['C','T'],
-             'M':['A','C'],
-             'W':['A','T'],
-             'B':['C','G','T'],
-             'H':['A','C','T'],
-             'D':['A','G','T'],
-             'V':['A','C','G'],
-             'N':['A','T','C','T']}
-    ambigconv = {"R":["A","G"],
-             "K":['G','T'],
-             'S':['G','C'],
-             'Y':['C','T'],
-             'M':['A','C'],
-             'W':['A','T'],
-             'B':['C','G','T'],
-             'H':['A','C','T'],
-             'D':['A','G','T'],
-             'V':['A','C','G'],
-             'N':['A','T','C','T']}
-
-
-
-    return seq
 
 def subambig(probes,props):
 
@@ -1249,7 +1212,7 @@ def get_args():
                         help="minimise pangenome graph size for target generation by removing nodes represented elsewhere in pieces",action='store_true')
     generaltargets.add_argument("--graphid",
                         help="ID to be used in naming graph in output file headers")
-    #"(injson,nthresh,lenthresh,outfile,target_unioncov,subnode_cluster_thresh=0.95,logger=None)"
+
 
 
 

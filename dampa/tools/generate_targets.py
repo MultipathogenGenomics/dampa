@@ -182,8 +182,6 @@ def get_args():
     return parser.parse_args()
 
 def get_start_end_padding(graph,pathdf,seqs,blocktoignore):
-    #TODO remove blocks that are ignored from pathdf before running
-    """chosen_subclustpath"""
     outtargets = {s.id: s for s in seqs}
     #for each unique value in pathdf["chosen_subclustpath"] get pathdf["path_id"], make unique list of path ids
     sub_to_path = pathdf[pathdf["union_subclustpath"]].groupby('subcluster_path_id')['path_name'].first().to_dict()
@@ -211,8 +209,7 @@ def get_start_end_padding(graph,pathdf,seqs,blocktoignore):
         for blockid in shortblocks["block_id"]:
             if blockid not in blocktoignore:
                 blockpaths = pathdf[pathdf["block_id"].astype(str) == str(blockid)]["path_id"].tolist()
-                # blockpaths = pathdf[pathdf["block_id"].astype(str) == str(blockid)]["path_name"].tolist()
-                ...
+
                 blockpaths = [p for p in blockpaths if id_to_pathname[p] in correspondingpaths if p != pathindex]
                 if len (blockpaths) == 0:
                     continue
@@ -376,7 +373,6 @@ def pad_short_paths(graph,usedpaths):
         newseqobj = SeqRecord.SeqRecord(Seq.Seq(newseq), id=pathname+"_path_consensus", description="")
         padded.append(pathname)
         outseqs.append(newseqobj)
-        # print(f"padded {pathname} from {shortlen} to {len(newseq)} with {padleft} left and {padright} right Ns based on {longpathname} of length {longlen}")
 
     unchangedseqs = [outtargets[x] for x in outtargets if x.replace("_path_consensus","") not in shortpaths]
     alloutseqs = unchangedseqs + outseqs
@@ -501,9 +497,8 @@ def single_species_targetgen_node_subclust(graph,pathlist,nthresh,lenthresh,outf
         componentspecies = component_nodes['path_species'].unique()[0]
     except:
         component_nodes2 = graph.nodes.df[graph.nodes.df["path_name"].isin(pathlist)]
-        ...
+
     """
-    todo
     save sub block consensus sequences for each block and which paths are in those subconsensuses
     for each path type check each node to see if the path type includes multiple subconsensuses
     if they do split paths into groups of paths based on subconsensus assigment
@@ -517,7 +512,7 @@ def single_species_targetgen_node_subclust(graph,pathlist,nthresh,lenthresh,outf
     for each block if there is more than one subconsensus for that block in the path type
         split path type into subgroups based on subconsensus id
     """
-    ...
+
     # Use only non-ignored blocks for cluster generation
 
     # for each block get subclusters at subnode_cluster_thresh identity and add as column to component_nodes
@@ -570,7 +565,6 @@ def single_species_targetgen_node_subclust(graph,pathlist,nthresh,lenthresh,outf
             elif str(rep) not in node_to_subcluster_rep and not logger:
                 print("missing block to subcluster - possible vsearch issue or very short node",rep,block,subpg)
             else:
-                # outseq = outseq + rep
                 subclusterrep = node_to_subcluster_rep[str(rep)]
                 outseq += str(subclusterrep.seq)
         outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=subpg, description="")
@@ -606,14 +600,12 @@ def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,subnode_cl
         pathidlist = [graph.paths.id_to_pos[x] for x in pathlist]
         filt_nodedf = graph.nodes.df[graph.nodes.df["path_id"].isin(pathidlist)]
 
-        # shared_paths = get_same_block_paths(filt_nodedf)
-        # for i in shared_paths.values():
-        #     print(len(i),i)
+
         nodetoblock = dict(zip(filt_nodedf.index, filt_nodedf["block_id"]))
         blockno = filt_nodedf["block_id"].nunique()
 
         block_to_ignore = rm_N_blocks(graph, nthresh)
-        # print(f"removed {len(block_to_ignore)} blocks for N proportion over {nthresh}")
+
         block_to_ignore = filter_short_terminal_blocks(graph, lenthresh, block_to_ignore)
         if blockno > 1:
             chosen_paths, strain_to_added_block = greedy_cover(filt_nodedf, block_to_ignore, colA="path_id", colB="block_id")
@@ -638,7 +630,7 @@ def single_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,subnode_cl
             outseqobj = SeqRecord.SeqRecord(Seq.Seq(outseq), id=f"{pathname}_path_consensus", description="")
             maskedseq = softmask_low_complexity(outseqobj, window=120, cutoff=1.6)  # TODO parameterize
             targetseqs.append(maskedseq)
-            # print("masked",maskedseq.id)
+
         if len(targetseqs) == 0:
             return []
         if blockno > 1:
@@ -804,7 +796,6 @@ def multi_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,subnode_clu
     component_nodes = graph.nodes.df[graph.nodes.df["path_name"].isin(pathlist)]
     unique_species_blocks = component_nodes.groupby('block_id')['path_species'].unique()
     block_to_species = unique_species_blocks.to_dict()
-    # single_species_blocks = unique_species_blocks[unique_species_blocks.apply(len) == 1].index.tolist()
     outseq = []
     for blockid in block_to_species:
         speciesls = block_to_species[blockid]
@@ -832,7 +823,6 @@ def multi_species_targetgen(graph,pathlist,nthresh,lenthresh,outfile,subnode_clu
                     rep.id = f"graph{graphid}block{blockid}_{modspecies}-rep{r}"
                     outseq.append(rep)
                     r += 1
-            ...
         elif len(speciesls) > 1:
 
             blockalign = graph.blocks[blockid].to_biopython_alignment()
