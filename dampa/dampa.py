@@ -26,6 +26,14 @@ from dampa.tools.cdhit_rep_noN import longest_or_fewest_ns_representatives
 from dampa import __version__ as dampaversion
 from dampa.tools.generate_targets import generate_targets,softmask_low_complexity,shannon_entropy
 from dampa.tools.union_coverage import union_coverage
+from dampa.tools.representative_graphprobes import representative_block_sequences
+
+logger = logging.getLogger("runtime_logger")
+if not logger.handlers:
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter("%(levelname)s - %(message)s"))
+    logger.addHandler(handler)
+logger.setLevel(logging.INFO)
 
 
 def cdhit_subset(args,filtinput):
@@ -554,7 +562,18 @@ def run_pangraph(args,filtinput,outloc):
             lowdepthnodes = remove_belowdepth_nodes(f"{outloc}_pangenome.gfa", args.pangraphdepth)  # Remove nodes below a certain depth
         else:
             lowdepthnodes = []
-        merged_seqs = linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",lowdepthnodes)# Remove the log file if not keeping logs
+        if args.representative_graphprobes:
+            merged_seqs = representative_block_sequences(
+                f"{outloc}.json",
+                args.representative_distance,
+                lowdepthnodes,
+                logger=logger,
+                use_consensus_alignment=args.representative_consensus_alignment,
+                threads=args.threads,
+                use_vsearch=args.representative_vsearch,
+            )
+        else:
+            merged_seqs = linear_transitive_chain_merge_fasta(f"{outloc}_pangenome.gfa",f"{outloc}_pangenome.fa",lowdepthnodes)# Remove the log file if not keeping logs
         if len(merged_seqs) == 0:
             return False
         merged_masked_seqs = [softmask_low_complexity(x,args.probelen,args.shannonthresh) for x in merged_seqs]
@@ -569,7 +588,10 @@ def run_pangraph(args,filtinput,outloc):
             logger.info(
                 f"Reduced pangenome node number: Original: {original}, Kept: {final}, Removed: {removed}, N-filtered: {nfilt}")
 
-        logger.info("Pangenome graph linear chain merging completed")
+        if args.representative_graphprobes:
+            logger.info("Pangenome graph representative sequence selection completed")
+        else:
+            logger.info("Pangenome graph linear chain merging completed")
     else:
         logger.error(f"One or more of pangraph outputs ({args.outputprefix}_pangenome.gfa, {args.outputprefix}_pangenome.fa, {args.outputprefix}.json) in {args.outputfolder} are not present. Check for error in pangraph log")
     return True
@@ -619,17 +641,27 @@ def run_finalprobetools(args, inprobes,originput,outloc):
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
     # Check if the expected output file is present
-    if os.path.exists(finalprobes):
-        shannonfilt,removed = shannon_filter(SeqIO.parse(finalprobes, "fasta"), args.shannonthresh)
-        SeqIO.write(shannonfilt,inprobes,"fasta")# Attempt to parse the final probes file to ensure it's valid
-        shutil.move(finalprobes, inprobes)  # Move the final probes file to the input probes path
-        totaprobes, addedprobes = get_probeno(inprobes, "_round_")  # Get the total and added probes count
-        logger.info(f"{len(removed)} probes were removed by Shannon entropy filter. {addedprobes} additional probes generated using probetools.")
+    if not os.path.exists(finalprobes):
+        logger.warning(f"Probetools generated no final probe file at {finalprobes}; leaving the existing probe set unchanged.")
         if not args.keeplogs:
-            os.remove(outloc + "_probetools.log")  # Remove the log file if not keeping logs
-        return f"{finalpref}_capture.pt", totaprobes  # Return the final capture file path and total probes count
-    else:
-        logger.error(f"Probetools output file {finalprobes} not present. Check for error in details probetools log.")
+            os.remove(outloc + "_probetools.log")
+        return None, get_probeno(inprobes)[0]
+
+    if os.path.getsize(finalprobes) == 0:
+        logger.warning("Probetools generated an empty final probe file; no additional probes were designed.")
+        if not args.keeplogs:
+            os.remove(outloc + "_probetools.log")
+        return None, get_probeno(inprobes)[0]
+
+    shannonfilt,removed = shannon_filter(SeqIO.parse(finalprobes, "fasta"), args.shannonthresh)
+    total_before = get_probeno(inprobes)[0]
+    SeqIO.write(shannonfilt, inprobes, "fasta")
+    shutil.move(finalprobes, inprobes)
+    totaprobes, addedprobes = get_probeno(inprobes, "_round_")
+    logger.info(f"{len(removed)} probes were removed by Shannon entropy filter. {addedprobes} additional probes generated using probetools.")
+    if not args.keeplogs:
+        os.remove(outloc + "_probetools.log")
+    return f"{finalpref}_capture.pt", totaprobes
 
 def load_capture_data(capture_path,probetools0covnmin):
     """
@@ -683,6 +715,13 @@ def runprobetoolscapture(args,probes,outloc,genomes):
     Returns:
         str: Path to the capture output file.
     """
+    if not os.path.exists(probes):
+        logger.warning(f"Probetools capture skipped because probe file {probes} does not exist.")
+        return None
+    if get_probeno(probes)[0] == 0:
+        logger.warning(f"Probetools capture skipped because {probes} contains no probes.")
+        return None
+
     current_directory = os.path.dirname(os.path.abspath(__file__))
     capture_log = open(outloc + "_capture.log", "w")
     with open(os.devnull, 'w') as devnull:
@@ -700,6 +739,7 @@ def runprobetoolscapture(args,probes,outloc,genomes):
         return outf
     else:
         logger.error(f"Probetools capture output file {outf} not present. Check for error in capture log.")
+        return None
 
 def get_ambig_count(seq):
     """
@@ -959,15 +999,16 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
         finalcaptureout, totalprobes = run_finalprobetools(args, probename, filtered_input,outloc)
         if not args.skipsubambig:
             subambig(probename, overallprops)
-        if not args.skip_summaries:
+        if not args.skip_summaries and finalcaptureout is not None:
             make_summaries(args, finalcaptureout, totalprobes,outloc)
     else:
-        totalprobes = get_probeno(probename)
+        totalprobes = get_probeno(probename)[0]
         if not args.skipsubambig:
             subambig(probename, overallprops)
         if not args.skip_summaries:
-            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input,args.input)
-            make_summaries(args, finalcaptureout, totalprobes,outloc)
+            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input)
+            if finalcaptureout is not None:
+                make_summaries(args, finalcaptureout, totalprobes,outloc)
 
 
     return totalprobes
@@ -1046,6 +1087,10 @@ def get_args():
     pangraphsettings.add_argument("--pangraphlen", type=int, default=90,help="Minimum length of a node to allow in pangenome graph")
     pangraphsettings.add_argument("--pangraphstrict", help="enable the -S strict identity option which limits merges to 1/pangraphbeta divergence",action='store_true')
     pangraphsettings.add_argument("--pangraphdepth", type=int, default=0,help="Minimum depth of a node to allow in pangenome graph. Nodes with depth below this will be removed from the graph. Set to 0 to not remove any nodes based on depth")
+    pangraphsettings.add_argument("--representative_graphprobes", action="store_true", help="design probes from representative observed sequences selected from each PanGraph block alignment instead of the block consensus")
+    pangraphsettings.add_argument("--representative_distance", type=float, default=0.1, help="maximum alignment mismatch proportion for a block sequence to be covered by a representative (used with --representative_graphprobes)")
+    pangraphsettings.add_argument("--representative_consensus_alignment", action="store_true", help="calculate representative distances and extract probe templates from PanGraph's consensus-coordinate alignment, excluding insertion columns and deletion gaps")
+    pangraphsettings.add_argument("--representative_vsearch", action="store_true", help="use VSEARCH centroids to reduce representative candidates before exact alignment-distance verification (requires --representative_graphprobes)")
 
 
     probetoolssettings = design.add_argument_group("Probetools settings","Used to retrieve sequences that may be missed in the graph based design step")
@@ -1219,6 +1264,10 @@ def get_args():
 
     args = parser.parse_args()
     if args.command == "design":
+        if args.representative_vsearch and not args.representative_graphprobes:
+            parser.error(
+                "--representative_vsearch requires --representative_graphprobes"
+            )
         if not args.graphid and args.generate_targets:
             args.graphid = args.outputprefix
     elif args.command == "targets":
