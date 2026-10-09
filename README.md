@@ -204,3 +204,13 @@ A line plot where each strain is a line that shows probe depth across the genome
 ### Eval
 Outputs are the same as `dampa design` without _probes.fasta
 
+
+## Test data
+
+A small test dataset of 398 Japanese Encephalitis Virus genomes is available in the `test_data` folder. To run a test design and evaluation of probes on this dataset, run the following commands from the top dampa directory:
+
+```
+dampa design -g testdata/jev/jev-input.fasta -o testdata/jev/ -p jev-output
+dampa eval -g testdata/jev/jev-input.fasta -q testdata/jev/jev-output_probes.fasta -o testdata/jev/ -p jev-eval-output
+
+``` 
