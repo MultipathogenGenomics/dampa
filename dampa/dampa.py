@@ -626,7 +626,7 @@ def run_finalprobetools(args, inprobes,originput,outloc):
     run_logged(cmd, probetools_log)
 
     # Check if the expected output file is present
-    if os.path.exists(finalprobes):
+    if os.path.exists(finalprobes) and os.path.exists(f"{finalpref}_capture.pt"):
         shannonfilt,removed = shannon_filter(SeqIO.parse(finalprobes, "fasta"), args.shannonthresh)
         SeqIO.write(shannonfilt,inprobes,"fasta")# Attempt to parse the final probes file to ensure it's valid
         shutil.move(finalprobes, inprobes)  # Move the final probes file to the input probes path
