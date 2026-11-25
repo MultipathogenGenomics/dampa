@@ -594,6 +594,14 @@ def shannon_filter(seqrecords,threshold):
             removed.append(x)
     return filtered,removed
 
+def remove_stale_blastdb(fasta):
+    # probetools reuses an existing index without checking it matches the fasta
+    db_files = [f"{fasta}.{suffix}" for suffix in ["nhr", "nin", "nsq"]]
+    if any(os.path.exists(f) and os.path.getmtime(f) < os.path.getmtime(fasta) for f in db_files):
+        for f in db_files:
+            if os.path.exists(f):
+                os.remove(f)
+
 def run_finalprobetools(args, inprobes,originput,outloc):
     """
     Runs the final probe design step using the Probetools tool.
@@ -615,6 +623,7 @@ def run_finalprobetools(args, inprobes,originput,outloc):
     else:
         dust=" -y Y"
     probetoolspath = importlib.resources.files("dampa").joinpath("tools/probetools/probetools_v_0_1_11_mod.py")
+    remove_stale_blastdb(originput)
     cmd = f"python {probetoolspath} makeprobeswinput -t {originput}{dust} -b 100 -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
     subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
 
@@ -690,6 +699,7 @@ def runprobetoolscapture(args,probes,outloc,genomes):
             dust = " -y N"
         else:
             dust = " -y Y"
+        remove_stale_blastdb(genomes)
         cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {genomes}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -L {args.probetools0covnmin} -T {args.threads}"
         subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
     outf = f"{outloc}_capture.pt"
