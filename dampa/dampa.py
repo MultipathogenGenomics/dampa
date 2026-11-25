@@ -963,11 +963,11 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
         if not args.skip_summaries:
             make_summaries(args, finalcaptureout, totalprobes,outloc)
     else:
-        totalprobes = get_probeno(probename)
+        totalprobes = get_probeno(probename)[0]
         if not args.skipsubambig:
             subambig(probename, overallprops)
         if not args.skip_summaries:
-            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input,args.input)
+            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input)
             make_summaries(args, finalcaptureout, totalprobes,outloc)
 
 
