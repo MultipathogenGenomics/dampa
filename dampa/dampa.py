@@ -27,6 +27,13 @@ from dampa import __version__ as dampaversion
 from dampa.tools.generate_targets import generate_targets,softmask_low_complexity,shannon_entropy
 from dampa.tools.union_coverage import union_coverage
 
+def run_logged(cmd, log):
+    log.flush()
+    returncode = subprocess.run(cmd, shell=True, stdout=log, stderr=log).returncode
+    if returncode != 0:
+        logger.error(f"Command failed (exit code {returncode}). See {log.name}\n{cmd}")
+        sys.exit(1)
+
 
 def cdhit_subset(args,filtinput):
     inseqs = SeqIO.to_dict(SeqIO.parse(filtinput, "fasta"))
@@ -34,7 +41,7 @@ def cdhit_subset(args,filtinput):
     cdhit_log = open(outloc + "_cdhit.log", "w")
 
     cmd = f"cd-hit-est -M 0 -c {args.clusterident} -T {args.threads} -aS {args.clustercov} -i {filtinput} -o {outloc}_cdhit_reps -d 0"
-    subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
+    run_logged(cmd, cdhit_log)
     cdhitrepsout = f"{outloc}_cdhit_reps.fasta"
     clusters,cdhitreps = longest_or_fewest_ns_representatives(inseqs,f"{outloc}_cdhit_reps.clstr")
 
@@ -75,7 +82,7 @@ def remove_outliers(args,filtinput,filtered):
     cdhithighreps = f"{outloc}_cdhit_reps_high"
 
     cmd = f"cd-hit-est -M 0 -c {args.clusterident} -T {args.threads} -aS {args.outlierclustercov} -i {filtinput} -o {cdhithighreps} -d 0"
-    subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
+    run_logged(cmd, cdhit_log)
     highclusters,highcdhitreps = longest_or_fewest_ns_representatives(inseqs,f"{cdhithighreps}.clstr")
     strain_to_highcluster_size = {strain: len(strains) for strains in highclusters.values() for strain in strains}
     logger.info(f"High cutoff clustering complete. {len(highcdhitreps)} representative sequences generated.")
@@ -83,7 +90,7 @@ def remove_outliers(args,filtinput,filtered):
     cdhitlowreps = f"{outloc}_cdhit_reps_low"
 
     cmd = f"cd-hit-est -M 0 -c {args.outlierclusterident} -T {args.threads} -aS {args.outlierclustercov} -i {cdhithighreps} -o {cdhitlowreps} -d 0"
-    subprocess.run(cmd, shell=True, stdout=cdhit_log, stderr=cdhit_log)
+    run_logged(cmd, cdhit_log)
     lowclusters,lowcdhitreps = longest_or_fewest_ns_representatives(inseqs, f"{cdhitlowreps}.clstr")
 
     logger.info(f"Low cutoff clustering complete. {len(lowcdhitreps)} representative sequences generated.")
@@ -544,7 +551,7 @@ def run_pangraph(args,filtinput,outloc):
         pangraphex = select_pangraph_binary() # TODO may be issues when conda is installed as x86 but running on arm64
         pangraphpath = importlib.resources.files("dampa").joinpath(pangraphvpath+pangraphex)
         cmd = f"""{pangraphpath} build -s {args.pangraphident} -a {args.pangraphalpha} -b {args.pangraphbeta} -l {args.pangraphlen} -j {args.threads} {filtinput} > {outloc}.json && {pangraphpath} export gfa --include-sequences -o {outloc}_pangenome.gfa {outloc}.json && {pangraphpath} export block-consensus -o {outloc}_pangenome.fa  {outloc}.json"""
-    subprocess.run(cmd, shell=True, stdout=pangraph_log, stderr=pangraph_log)
+    run_logged(cmd, pangraph_log)
     if os.path.exists(f"{outloc}_pangenome.fa") and os.path.exists(f"{outloc}_pangenome.gfa") and os.path.exists(f"{outloc}.json"):
         logger.info("Pangraph ran successfully")
         if not args.keeplogs:
@@ -616,10 +623,10 @@ def run_finalprobetools(args, inprobes,originput,outloc):
         dust=" -y Y"
     probetoolspath = importlib.resources.files("dampa").joinpath("tools/probetools/probetools_v_0_1_11_mod.py")
     cmd = f"python {probetoolspath} makeprobeswinput -t {originput}{dust} -b 100 -x {inprobes} -o {finalpref} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -T {args.threads} -L {args.probetools0covnmin} -c 100 -d {args.maxambig}"
-    subprocess.run(cmd, shell=True, stdout=probetools_log, stderr=probetools_log)  # Execute the command
+    run_logged(cmd, probetools_log)
 
     # Check if the expected output file is present
-    if os.path.exists(finalprobes):
+    if os.path.exists(finalprobes) and os.path.exists(f"{finalpref}_capture.pt"):
         shannonfilt,removed = shannon_filter(SeqIO.parse(finalprobes, "fasta"), args.shannonthresh)
         SeqIO.write(shannonfilt,inprobes,"fasta")# Attempt to parse the final probes file to ensure it's valid
         shutil.move(finalprobes, inprobes)  # Move the final probes file to the input probes path
@@ -691,7 +698,7 @@ def runprobetoolscapture(args,probes,outloc,genomes):
         else:
             dust = " -y Y"
         cmd = f"python {current_directory}/tools/probetools/probetools_v_0_1_11_mod.py capture -t {genomes}{dust} -p {probes} -o {outloc} -i {args.probetoolsidentity} -l {args.probetoolsalignmin} -L {args.probetools0covnmin} -T {args.threads}"
-        subprocess.run(cmd, shell=True,stdout=capture_log, stderr=capture_log)
+        run_logged(cmd, capture_log)
     outf = f"{outloc}_capture.pt"
     if os.path.exists(outf):
         logger.info(f"Probetools capture ran successfully")
@@ -699,7 +706,8 @@ def runprobetoolscapture(args,probes,outloc,genomes):
             os.remove(outloc + "_capture.log")
         return outf
     else:
-        logger.error(f"Probetools capture output file {outf} not present. Check for error in capture log.")
+        logger.error(f"Probetools capture output file {outf} not present. Check for error in {outloc}_capture.log")
+        sys.exit(1)
 
 def get_ambig_count(seq):
     """
@@ -962,11 +970,11 @@ def design_probes(args,filtered_input,probeprefix,overallprops,rminp,outloc):
         if not args.skip_summaries:
             make_summaries(args, finalcaptureout, totalprobes,outloc)
     else:
-        totalprobes = get_probeno(probename)
+        totalprobes = get_probeno(probename)[0]
         if not args.skipsubambig:
             subambig(probename, overallprops)
         if not args.skip_summaries:
-            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input,args.input)
+            finalcaptureout = runprobetoolscapture(args, probename,outloc, filtered_input)
             make_summaries(args, finalcaptureout, totalprobes,outloc)
 
 
