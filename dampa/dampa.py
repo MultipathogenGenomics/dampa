@@ -699,7 +699,8 @@ def runprobetoolscapture(args,probes,outloc,genomes):
             os.remove(outloc + "_capture.log")
         return outf
     else:
-        logger.error(f"Probetools capture output file {outf} not present. Check for error in capture log.")
+        logger.error(f"Probetools capture output file {outf} not present. Check for error in {outloc}_capture.log")
+        sys.exit(1)
 
 def get_ambig_count(seq):
     """
