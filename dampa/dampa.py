@@ -16,6 +16,7 @@ from collections import Counter
 import platform
 import subprocess
 import glob
+import hashlib
 import re
 import copy
 import importlib.resources
@@ -874,12 +875,13 @@ def subambig(probes,props):
     outprobes = []
     for probe in rawprobes:
         pseq = str(probe.seq).upper()
+        rng = random.Random(hashlib.sha256(pseq.encode()).digest())
         outseq = ""
         for n in pseq:
             if n not in ['A','T','C','G']:
                 choices = ambig[n]
                 weights = [props[x] for x in choices]
-                subnuc = random.choices(choices, weights=weights, k=1)[0]
+                subnuc = rng.choices(choices, weights=weights, k=1)[0]
                 outseq += subnuc
             else:
                 outseq += n
