@@ -231,7 +231,22 @@ def nucleotide_proportions(sequences,propinit):
     return proportions
 
 def to_dict_remove_dups(sequences):
-    return {record.id: record for record in sequences}
+    records = {}
+    identical = 0
+    conflicting = set()
+    for record in sequences:
+        if record.id not in records:
+            records[record.id] = record
+        elif str(records[record.id].seq) == str(record.seq):
+            identical += 1
+        else:
+            conflicting.add(record.id)
+    if conflicting:
+        logger.error(f"{len(conflicting)} record ids are shared by different sequences, e.g. {sorted(conflicting)[:5]}. Record ids must be unique.")
+        sys.exit(1)
+    if identical:
+        logger.warning(f"Removed {identical} exact duplicate records (same id and sequence)")
+    return records
 
 def _softmask_worker(args):
     record, probelen, shannonthresh = args
