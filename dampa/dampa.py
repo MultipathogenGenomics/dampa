@@ -16,6 +16,7 @@ from collections import Counter
 import platform
 import subprocess
 import glob
+import hashlib
 import re
 import copy
 import importlib.resources
@@ -320,6 +321,8 @@ def filter_for_nonstandard_inputs(genomes,outloc,maxnonspandard,filtered,shannon
         dupe = copy.copy(masked_genomes[0])
         dupe.id = dupe.id+"_dupe"
         masked_genomes.append(dupe)
+    # PanGraph's output depends on input order
+    masked_genomes.sort(key=lambda r: (hashlib.sha256(str(r.seq).upper().encode()).hexdigest(), r.id))
     outpath = outloc+"_filtered_input.fasta"
     SeqIO.write(masked_genomes, outpath, "fasta")
     logger.info(f"total genomes with trailing polyA >5bp trimmed: {notrimmed}")
